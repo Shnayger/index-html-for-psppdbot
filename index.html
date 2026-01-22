@@ -322,9 +322,7 @@
             }, 10);
             
             // Также в консоль браузера
-            if (type !== 'debug') { // Не логируем отладку в консоль
-                console.log(`[${timestamp}] ${message}`);
-            }
+            console.log(`[${timestamp}] ${message}`);
         }
         
         logBtn.addEventListener('click', () => {
@@ -355,7 +353,7 @@
             }
         }
 
-        // Конфигурация
+        // Конфигурация сканера
         const config = {
             fps: 10,
             qrbox: {
@@ -502,7 +500,7 @@
             }
         }
 
-        // Обработчик сканирования
+        // Обработчик сканирования - только УСПЕШНЫЕ сканирования
         function onScanSuccess(decodedText) {
             const code = decodedText.trim();
             const now = Date.now();
@@ -575,39 +573,6 @@
             }
         }
 
-        // Функция для обработки ошибок сканирования - ИГНОРИРУЕМ ПОВТОРНЫЕ ОШИБКИ
-        let lastError = '';
-        let errorCount = 0;
-        let lastErrorTime = 0;
-        
-        function onScanError(errorMessage) {
-            const now = Date.now();
-            
-            // Игнорируем стандартную ошибку "no barcode or qr code detected"
-            if (errorMessage.includes('no barcode or qr code detected')) {
-                return; // Полностью игнорируем эту ошибку
-            }
-            
-            // Игнорируем NotFoundException
-            if (errorMessage.includes('NotFoundException')) {
-                return;
-            }
-            
-            // Для других ошибок - логируем не чаще чем раз в 5 секунд
-            if (errorMessage === lastError && (now - lastErrorTime) < 5000) {
-                errorCount++;
-                return;
-            }
-            
-            // Логируем новую ошибку
-            if (errorMessage !== lastError || errorCount > 10) {
-                logToConsole(`⚠️ Ошибка сканера: ${errorMessage}`, 'warning');
-                lastError = errorMessage;
-                lastErrorTime = now;
-                errorCount = 0;
-            }
-        }
-
         // Визуальная обратная связь
         function showScanFeedback(success, type) {
             const color = success ? (type === 'datamatrix' ? '#00ff9d' : '#4da6ff') : '#ff4444';
@@ -621,7 +586,7 @@
             }, 300);
         }
 
-        // Начало сканирования
+        // Начало сканирования - ОШИБКИ ПОЛНОСТЬЮ ИГНОРИРУЮТСЯ
         function startScanner() {
             if (isScanning) return;
             
@@ -631,12 +596,17 @@
                 { facingMode: "environment" },
                 config,
                 onScanSuccess,
-                onScanError // Используем новую функцию обработки ошибок
+                () => {
+                    // ПУСТАЯ ФУНКЦИЯ - все ошибки сканирования игнорируются
+                    // Библиотека будет вызывать эту функцию постоянно при отсутствии кода,
+                    // но мы ничего не делаем и не логируем
+                }
             ).then(() => {
                 isScanning = true;
                 logToConsole('✅ Сканер запущен', 'success');
             }).catch(err => {
-                logToConsole(`❌ Ошибка запуска: ${err.message || err}`, 'error');
+                // Только критические ошибки запуска камеры
+                logToConsole(`❌ Ошибка запуска камеры: ${err.message || err}`, 'error');
                 scanHintEl.textContent = 'Ошибка камеры';
                 scanHintEl.style.color = '#ff4444';
             });
@@ -661,6 +631,7 @@
                         Telegram.WebApp.close();
                     }
                 }).catch(err => {
+                    // Не логируем ошибки остановки
                     if (window.Telegram && Telegram.WebApp) {
                         Telegram.WebApp.close();
                     }
@@ -680,8 +651,8 @@
         setTimeout(() => {
             logConsole.style.display = 'block';
             logBtn.style.background = 'linear-gradient(135deg, #4a5568, #2d3748)';
-            logToConsole('✅ Система готова', 'success');
-            logToConsole('DataMatrix → штрих-код → DataMatrix → ...', 'info');
+            logToConsole('✅ Система готова к работе', 'success');
+            logToConsole('Последовательность: DataMatrix → штрих-код → DataMatrix → ...', 'info');
         }, 1000);
 
         // CSS для скрытия интерфейса библиотеки
