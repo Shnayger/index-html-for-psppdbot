@@ -398,7 +398,7 @@
             }
             
             // 2. СИ - 35 символов
-            else if (length === 35) {
+            else if (length >= 32 && length <= 35) {
                 logToConsole('Обнаружен СИ (35 символов)', 'success');
                 
                 const gtin = code.substring(3, 16);
