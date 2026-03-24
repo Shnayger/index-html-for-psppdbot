@@ -335,6 +335,7 @@
         // Состояние приложения
         let step = 'datamatrix';
         let scanCount = 0;
+        let expectedGtin = null;
         const resultsEl = document.getElementById('results');
         const resultsContainer = document.getElementById('results-container');
         const scanHintEl = document.getElementById('scan-hint');
@@ -502,76 +503,105 @@
 
         // Обработчик сканирования - только УСПЕШНЫЕ сканирования
         function onScanSuccess(decodedText) {
-            const code = decodedText.trim();
-            const now = Date.now();
-            
-            // Защита от дублирования
-            if (code === lastScannedCode && (now - lastScanTime) < 800) {
-                return;
-            }
-            
-            lastScannedCode = code;
-            lastScanTime = now;
-            
-            logToConsole('━━━━━━━━━━━━━━━━━━━━', 'info');
-            logToConsole(`Сканировано: ${code}`, 'info');
-            logToConsole(`Длина: ${code.length} символов`, 'info');
-            
-            let isValid = false;
-            let result = null;
+    const code = decodedText.trim();
+    const now = Date.now();
+    
+    if (code === lastScannedCode && (now - lastScanTime) < 800) {
+        return;
+    }
+    
+    lastScannedCode = code;
+    lastScanTime = now;
+    
+    logToConsole('━━━━━━━━━━━━━━━━━━━━', 'info');
+    logToConsole(`Сканировано: ${code}`, 'info');
+    logToConsole(`Длина: ${code.length} символов`, 'info');
+    
+    let isValid = false;
+    let result = null;
 
-            if (step === 'datamatrix') {
-                if (code.length >= 20 && code.length <= 50) {
-                    result = analyzeDataMatrix(code);
-                    
-                    if (result) {
-                        isValid = true;
-                        addResult(result.display, 'datamatrix', result.details);
-                        step = 'barcode';
-                        playSound('success');
-                        showScanFeedback(true, 'datamatrix');
-                        logToConsole(`✅ Принят: ${result.type.toUpperCase()}`, 'success');
-                    } else {
-                        logToConsole(`❌ Не удалось определить тип DataMatrix`, 'error');
+    if (step === 'datamatrix') {
+        if (code.length >= 20 && code.length <= 50) {
+            result = analyzeDataMatrix(code);
+            
+            if (result) {
+                isValid = true;
+                addResult(result.display, 'datamatrix', result.details);
+                
+                // Сохраняем GTIN, если это СИ
+                if (result.type === 'si') {
+                    expectedGtin = result.gtin;
+                } else {
+                    expectedGtin = null;
+                }
+                
+                step = 'barcode';
+                playSound('success');
+                showScanFeedback(true, 'datamatrix');
+                logToConsole(`✅ Принят: ${result.type.toUpperCase()}`, 'success');
+            } else {
+                logToConsole(`❌ Не удалось определить тип DataMatrix`, 'error');
+            }
+        } else {
+            logToConsole(`❌ Не DataMatrix (длина ${code.length})`, 'error');
+        }
+    } 
+    else if (step === 'barcode') {
+        if (/^\d{13}$/.test(code)) {
+            isValid = true;
+            addResult(`Штрих-код: ${code}`, 'barcode', `EAN-13: ${code}`);
+            
+            // === ПРОВЕРКА СОВПАДЕНИЯ GTIN ИЗ СИ ===
+            if (expectedGtin) {
+                if (expectedGtin === code) {
+                    logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${code})`, 'success');
+                    const lastItem = resultsEl.lastElementChild;
+                    if (lastItem) {
+                        lastItem.innerHTML += '<div style="color:#00ff9d; font-size:12px; margin-top:4px;">✅ СОВПАДЕНИЕ</div>';
                     }
                 } else {
-                    logToConsole(`❌ Не DataMatrix (длина ${code.length})`, 'error');
-                }
-            } 
-            else if (step === 'barcode') {
-                if (/^\d{13}$/.test(code)) {
-                    isValid = true;
-                    addResult(`Штрих-код: ${code}`, 'barcode', `EAN-13: ${code}`);
-                    step = 'datamatrix';
-                    playSound('success');
-                    showScanFeedback(true, 'barcode');
-                    logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
-                }
-                else if (/^\d{8}$/.test(code)) {
-                    isValid = true;
-                    addResult(`Штрих-код: ${code}`, 'barcode', `EAN-8: ${code}`);
-                    step = 'datamatrix';
-                    playSound('success');
-                    showScanFeedback(true, 'barcode');
-                    logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
-                }
-                else if (/^[A-Za-z0-9]{8,20}$/.test(code)) {
-                    isValid = true;
-                    addResult(`Штрих-код: ${code}`, 'barcode');
-                    step = 'datamatrix';
-                    playSound('success');
-                    showScanFeedback(true, 'barcode');
-                    logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
-                }
-                else {
-                    logToConsole(`❌ Не распознан как штрих-код`, 'error');
+                    logToConsole(`❌ НЕ УСПЕШНО: СИ=${expectedGtin}, ШК=${code}`, 'error');
+                    const lastItem = resultsEl.lastElementChild;
+                    if (lastItem) {
+                        lastItem.innerHTML += '<div style="color:#ff4444; font-size:12px; margin-top:4px;">❌ НЕ СОВПАДАЕТ</div>';
+                    }
                 }
             }
+            // =====================================
             
-            if (isValid) {
-                updateScanHint();
-            }
+            step = 'datamatrix';
+            expectedGtin = null;
+            playSound('success');
+            showScanFeedback(true, 'barcode');
+            logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
         }
+        else if (/^\d{8}$/.test(code)) {
+            isValid = true;
+            addResult(`Штрих-код: ${code}`, 'barcode', `EAN-8: ${code}`);
+            step = 'datamatrix';
+            expectedGtin = null;
+            playSound('success');
+            showScanFeedback(true, 'barcode');
+            logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
+        }
+        else if (/^[A-Za-z0-9]{8,20}$/.test(code)) {
+            isValid = true;
+            addResult(`Штрих-код: ${code}`, 'barcode');
+            step = 'datamatrix';
+            expectedGtin = null;
+            playSound('success');
+            showScanFeedback(true, 'barcode');
+            logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
+        }
+        else {
+            logToConsole(`❌ Не распознан как штрих-код`, 'error');
+        }
+    }
+    
+    if (isValid) {
+        updateScanHint();
+    }
+}
 
         // Визуальная обратная связь
         function showScanFeedback(success, type) {
