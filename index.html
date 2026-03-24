@@ -401,7 +401,7 @@
             else if (length >= 32 && length <= 35) {
                 logToConsole('Обнаружен СИ (35 символов)', 'success');
                 
-                const gtin = code.substring(3, 16);
+                const gtin = code.substring(4, 17);
                 
                 if (/^\d{13}$/.test(gtin)) {
                     return {
