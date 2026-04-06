@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -547,35 +548,39 @@
         }
     } 
     else if (step === 'barcode') {
-        // === ПРОВЕРКА СОВПАДЕНИЯ GTIN ИЗ СИ ===
-const is_success = expectedGtin && expectedGtin === code;
-if (is_success) {
-    logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${code})`, 'success');
-    const lastItem = resultsEl.lastElementChild;
-    if (lastItem) {
-        lastItem.innerHTML += '<div style="color:#00ff9d; font-size:12px; margin-top:4px;">✅ СОВПАДЕНИЕ</div>';
+        if (/^\d{13}$/.test(code)) {
+    isValid = true;
+    addResult(`Штрих-код: ${code}`, 'barcode', `EAN-13: ${code}`);
+    
+    // === ПРОВЕРКА СОВПАДЕНИЯ GTIN ИЗ СИ ===
+    const is_success = expectedGtin && expectedGtin === code;
+    if (is_success) {
+        logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${code})`, 'success');
+        const lastItem = resultsEl.lastElementChild;
+        if (lastItem) {
+            lastItem.innerHTML += '<div style="color:#00ff9d; font-size:12px; margin-top:4px;">✅ СОВПАДЕНИЕ</div>';
+        }
+    } else {
+        logToConsole(`❌ НЕ УСПЕШНО: СИ=${expectedGtin}, ШК=${code}`, 'error');
+        const lastItem = resultsEl.lastElementChild;
+        if (lastItem) {
+            lastItem.innerHTML += '<div style="color:#ff4444; font-size:12px; margin-top:4px;">❌ НЕ СОВПАДАЕТ</div>';
+        }
     }
-} else {
-    logToConsole(`❌ НЕ УСПЕШНО: СИ=${expectedGtin}, ШК=${code}`, 'error');
-    const lastItem = resultsEl.lastElementChild;
-    if (lastItem) {
-        lastItem.innerHTML += '<div style="color:#ff4444; font-size:12px; margin-top:4px;">❌ НЕ СОВПАДАЕТ</div>';
-    }
-}
 
-// === ОТПРАВКА НА СЕРВЕР ===
-const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-const fullName = user ? `${user.last_name || ''} ${user.first_name || ''}`.trim() || `ID${user.id}` : "Неизвестно";
-const telegramId = user?.id || 0;
+    // === ОТПРАВКА ДАННЫХ НА СЕРВЕР ===
+    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    const fullName = user ? `${user.last_name || ''} ${user.first_name || ''}`.trim() || `ID${user.id}` : "Неизвестно";
+    const telegramId = user?.id || 0;
 
-sendToServer({
-    datamatrix_code: lastScannedCode,
-    barcode: code,
-    is_success: is_success,
-    user_full_name: fullName,
-    telegram_id: telegramId
-});
-// ===================================
+    sendToServer({
+        datamatrix_code: lastScannedCode,
+        barcode: code,
+        is_success: is_success,
+        user_full_name: fullName,
+        telegram_id: telegramId
+    });
+    // ===================================
 
     step = 'datamatrix';
     expectedGtin = null;
@@ -627,7 +632,6 @@ sendToServer({
         // Начало сканирования - ОШИБКИ ПОЛНОСТЬЮ ИГНОРИРУЮТСЯ
 
         async function sendToServer(logData) {
-    // ⚠️ ЗАМЕНИТЕ НА ВАШ IP ИЛИ ДОМЕН
     const serverUrl = 'http://178.172.244.12:8001/api/log-verification';
     
     try {
@@ -637,10 +641,14 @@ sendToServer({
             body: JSON.stringify(logData)
         });
         
-        if (!response.ok) throw new Error('Сервер вернул ошибку');
-        logToConsole('✅ Пара сохранена на сервере', 'success');
+        const result = await response.json();
+        if (result.status === "success") {
+            logToConsole('✅ Пара сохранена на сервере', 'success');
+        } else {
+            logToConsole(`❌ Сервер вернул: ${JSON.stringify(result)}`, 'error');
+        }
     } catch (err) {
-        logToConsole(`❌ Ошибка API: ${err.message}`, 'error');
+        logToConsole(`❌ Ошибка сети: ${err.message}`, 'error');
     }
 }
         
