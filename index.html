@@ -631,7 +631,7 @@ sendToServer({
         // Начало сканирования - ОШИБКИ ПОЛНОСТЬЮ ИГНОРИРУЮТСЯ
 
         async function sendToServer(logData) {
-    const serverUrl = 'http://178.172.244.12:8001/api/log-verification';
+    const serverUrl = 'https://178.172.244.12:8001/api/log-verification';
     
     try {
         const response = await fetch(serverUrl, {
