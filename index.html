@@ -548,33 +548,45 @@
     } 
     else if (step === 'barcode') {
         if (/^\d{13}$/.test(code)) {
-            isValid = true;
-            addResult(`Штрих-код: ${code}`, 'barcode', `EAN-13: ${code}`);
-            
-            // === ПРОВЕРКА СОВПАДЕНИЯ GTIN ИЗ СИ ===
-            if (expectedGtin) {
-                if (expectedGtin === code) {
-                    logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${code})`, 'success');
-                    const lastItem = resultsEl.lastElementChild;
-                    if (lastItem) {
-                        lastItem.innerHTML += '<div style="color:#00ff9d; font-size:12px; margin-top:4px;">✅ СОВПАДЕНИЕ</div>';
-                    }
-                } else {
-                    logToConsole(`❌ НЕ УСПЕШНО: СИ=${expectedGtin}, ШК=${code}`, 'error');
-                    const lastItem = resultsEl.lastElementChild;
-                    if (lastItem) {
-                        lastItem.innerHTML += '<div style="color:#ff4444; font-size:12px; margin-top:4px;">❌ НЕ СОВПАДАЕТ</div>';
-                    }
-                }
-            }
-            // =====================================
-            
-            step = 'datamatrix';
-            expectedGtin = null;
-            playSound('success');
-            showScanFeedback(true, 'barcode');
-            logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
+    isValid = true;
+    addResult(`Штрих-код: ${code}`, 'barcode', `EAN-13: ${code}`);
+    
+    // === ПРОВЕРКА СОВПАДЕНИЯ GTIN ИЗ СИ ===
+    const is_success = expectedGtin && expectedGtin === code;
+    if (is_success) {
+        logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${code})`, 'success');
+        const lastItem = resultsEl.lastElementChild;
+        if (lastItem) {
+            lastItem.innerHTML += '<div style="color:#00ff9d; font-size:12px; margin-top:4px;">✅ СОВПАДЕНИЕ</div>';
         }
+    } else {
+        logToConsole(`❌ НЕ УСПЕШНО: СИ=${expectedGtin}, ШК=${code}`, 'error');
+        const lastItem = resultsEl.lastElementChild;
+        if (lastItem) {
+            lastItem.innerHTML += '<div style="color:#ff4444; font-size:12px; margin-top:4px;">❌ НЕ СОВПАДАЕТ</div>';
+        }
+    }
+
+    // === ОТПРАВКА ДАННЫХ НА СЕРВЕР ===
+    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    const fullName = user ? `${user.last_name || ''} ${user.first_name || ''}`.trim() || `ID${user.id}` : "Неизвестно";
+    const telegramId = user?.id || 0;
+
+    sendToServer({
+        datamatrix_code: lastScannedCode,
+        barcode: code,
+        is_success: is_success,
+        user_full_name: fullName,
+        telegram_id: telegramId
+    });
+    // ===================================
+
+    step = 'datamatrix';
+    expectedGtin = null;
+    playSound('success');
+    showScanFeedback(true, 'barcode');
+    logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
+}
         else if (/^\d{8}$/.test(code)) {
             isValid = true;
             addResult(`Штрих-код: ${code}`, 'barcode', `EAN-8: ${code}`);
@@ -617,6 +629,28 @@
         }
 
         // Начало сканирования - ОШИБКИ ПОЛНОСТЬЮ ИГНОРИРУЮТСЯ
+
+        async function sendToServer(logData) {
+    const serverUrl = 'http://178.172.244.12:8001/api/log-verification';
+    
+    try {
+        const response = await fetch(serverUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(logData)
+        });
+        
+        const result = await response.json();
+        if (result.status === "success") {
+            logToConsole('✅ Пара сохранена на сервере', 'success');
+        } else {
+            logToConsole(`❌ Сервер вернул: ${JSON.stringify(result)}`, 'error');
+        }
+    } catch (err) {
+        logToConsole(`❌ Ошибка сети: ${err.message}`, 'error');
+    }
+}
+        
         function startScanner() {
             if (isScanning) return;
             
