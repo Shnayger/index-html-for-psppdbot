@@ -380,23 +380,19 @@ let lastBarcode = null;
         let lastScannedCode = '';
         let lastScanTime = 0;
 
-        // Функция анализа DataMatrix - извлекает GTIN с позиций 4-16 (индексы 3-15)
+        // Функция анализа DataMatrix - только извлекает данные, НЕ меняет step
 function analyzeDataMatrix(code) {
     const length = code.length;
     
     // Извлекаем GTIN: символы с 4-й по 16-ю позицию (индексы 3-15)
-    // Всего 13 символов (позиции 4,5,6,7,8,9,10,11,12,13,14,15,16)
     let gtin = null;
     if (length >= 16) {
-        gtin = code.substring(3, 16); // с индекса 3 (4-й символ) по индекс 15 (16-й символ)
+        gtin = code.substring(3, 16);
         logToConsole(`Извлечен GTIN: ${gtin} (с позиций 4-16)`, 'info');
-    } else {
-        logToConsole(`DataMatrix слишком короткий (${length} символов), не удалось извлечь GTIN`, 'warning');
     }
     
     // Определяем тип DataMatrix
     if (length === 30) {
-        // УКЗ
         const number = code.substring(18, 27);
         const series = code.substring(27, 30);
         return {
@@ -407,7 +403,6 @@ function analyzeDataMatrix(code) {
             details: `Номер: ${number}, Серия: ${series}, GTIN: ${gtin || 'не найден'}`
         };
     } else if (length >= 33 && length <= 50) {
-        // СИ
         return {
             type: 'si',
             fullCode: code,
@@ -416,7 +411,6 @@ function analyzeDataMatrix(code) {
             details: `GTIN: ${gtin || 'не найден'} (позиции 4-16)`
         };
     } else if (length === 22 && /^\d{22}$/.test(code)) {
-        // Стикеры
         const id = code.substring(0, 9);
         const stickerGtin = code.substring(9, 22);
         return {
@@ -427,7 +421,6 @@ function analyzeDataMatrix(code) {
             details: `ID: ${id}, GTIN: ${stickerGtin}`
         };
     } else if (length >= 20 && length <= 50) {
-        // Другой DataMatrix
         return {
             type: 'datamatrix',
             fullCode: code,
@@ -439,6 +432,7 @@ function analyzeDataMatrix(code) {
     
     return null;
 }
+        
         // Функция добавления результата
         function addResult(text, type, details = '') {
             const emptyMessage = resultsEl.querySelector('.empty-results');
@@ -494,12 +488,13 @@ function analyzeDataMatrix(code) {
         }
 
         // Основная функция обработки сканирования
+// Основная функция обработки сканирования - С СОХРАНЕНИЕМ ОРИГИНАЛЬНОЙ ЛОГИКИ ПЕРЕКЛЮЧЕНИЯ
 function onScanSuccess(decodedText) {
     const code = decodedText;
     const now = Date.now();
     
-    // Защита от дублей в течение 1 секунды
-    if (code === lastScannedCode && (now - lastScanTime) < 1000) {
+    // Защита от дублей
+    if (code === lastScannedCode && (now - lastScanTime) < 800) {
         return;
     }
     
@@ -510,24 +505,27 @@ function onScanSuccess(decodedText) {
     logToConsole(`Сканировано: ${code}`, 'info');
     logToConsole(`Длина: ${code.length} символов`, 'info');
     
-    // Режим сканирования DataMatrix
+    let isValid = false;
+    let result = null;
+
+    // РЕЖИМ СКАНИРОВАНИЯ DATAMATRIX
     if (step === 'datamatrix') {
         if (code.length >= 20 && code.length <= 50) {
-            const result = analyzeDataMatrix(code);
+            result = analyzeDataMatrix(code);
             if (result) {
-                // Сохраняем полный DataMatrix
+                isValid = true;
+                // Сохраняем полный DataMatrix и GTIN
                 lastDatamatrixCode = result.fullCode;
-                // Сохраняем извлеченный GTIN
                 extractedGtin = result.gtin;
                 
                 addResult(result.display, 'datamatrix', result.details);
                 playSound('success');
                 showScanFeedback(true, 'datamatrix');
-                logToConsole(`✅ Принят DataMatrix: ${result.type.toUpperCase()}`, 'success');
+                logToConsole(`✅ Принят: ${result.type.toUpperCase()}`, 'success');
                 logToConsole(`📦 Полный код: ${lastDatamatrixCode}`, 'info');
-                logToConsole(`🔢 Извлечен GTIN (поз.4-16): ${extractedGtin || 'не найден'}`, 'info');
+                logToConsole(`🔢 GTIN (поз.4-16): ${extractedGtin || 'не найден'}`, 'info');
                 
-                // Переключаемся на сканирование штрих-кода
+                // ✅ ПЕРЕКЛЮЧАЕМ НА ШТРИХ-КОД (как было в оригинале)
                 step = 'barcode';
                 updateScanHint();
             } else {
@@ -537,16 +535,15 @@ function onScanSuccess(decodedText) {
             logToConsole(`❌ Не DataMatrix (длина ${code.length})`, 'error');
         }
     } 
-    // Режим сканирования штрих-кода
+    // РЕЖИМ СКАНИРОВАНИЯ ШТРИХ-КОДА
     else if (step === 'barcode') {
         let normalizedBarcode = code;
-        let isValid = false;
         let typeLabel = '';
-        
-        // Нормализация EAN-13 (добавляем ведущий ноль для 12 цифр)
+
+        // Нормализация EAN-13 (12 цифр -> добавляем ведущий 0)
         if (/^\d{12}$/.test(code)) {
             normalizedBarcode = '0' + code;
-            typeLabel = 'EAN-13 (12→13)';
+            typeLabel = 'EAN-13';
             isValid = true;
             logToConsole(`⚠️ EAN-12 преобразован в EAN-13: ${normalizedBarcode}`, 'warning');
         }
@@ -568,9 +565,8 @@ function onScanSuccess(decodedText) {
             typeLabel = 'GTIN-14';
             isValid = true;
         }
-        // Альфа-цифровой код
+        // Альфа-цифровой
         else if (/^[A-Za-z0-9]{8,20}$/.test(code)) {
-            normalizedBarcode = code;
             typeLabel = 'альфа-цифровой';
             isValid = true;
         }
@@ -578,7 +574,7 @@ function onScanSuccess(decodedText) {
             logToConsole(`❌ Не распознан как штрих-код (${code.length} символов)`, 'error');
             return;
         }
-        
+
         if (isValid) {
             // Сохраняем штрих-код
             lastBarcode = normalizedBarcode;
@@ -586,17 +582,15 @@ function onScanSuccess(decodedText) {
             addResult(`Штрих-код: ${normalizedBarcode}`, 'barcode', typeLabel);
             playSound('success');
             showScanFeedback(true, 'barcode');
-            logToConsole(`✅ Принят штрих-код: ${normalizedBarcode} (${typeLabel})`, 'success');
+            logToConsole(`✅ Принят: ШТРИХ-КОД (${normalizedBarcode})`, 'success');
             
-            // Проверка соответствия GTIN из DataMatrix и штрих-кода
+            // Проверка соответствия GTIN
             let isMatch = false;
             if (extractedGtin && normalizedBarcode) {
-                // Сравниваем GTIN (обрезаем до длины штрих-кода если нужно)
-                const barcodeClean = normalizedBarcode.replace(/^0+/, ''); // убираем ведущие нули
+                const barcodeClean = normalizedBarcode.replace(/^0+/, '');
                 const gtinClean = extractedGtin.replace(/^0+/, '');
                 isMatch = (barcodeClean === gtinClean) || 
-                          (normalizedBarcode === extractedGtin) ||
-                          (normalizedBarcode === extractedGtin.substring(0, normalizedBarcode.length));
+                          (normalizedBarcode === extractedGtin);
                 
                 if (isMatch) {
                     logToConsole(`✅ СОВПАДЕНИЕ: GTIN (${extractedGtin}) = ШК (${normalizedBarcode})`, 'success');
@@ -613,12 +607,12 @@ function onScanSuccess(decodedText) {
                 }
             }
             
-            // Получаем данные пользователя Telegram
+            // Получаем данные пользователя
             const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
             const fullName = user ? `${user.last_name || ''} ${user.first_name || ''}`.trim() || `ID${user.id}` : "Неизвестно";
             const telegramId = user?.id || 0;
             
-            // Отправляем на сервер (проверка уникальности ПАРЫ выполняется на сервере)
+            // Отправляем на сервер
             sendToServer({
                 datamatrix_code: lastDatamatrixCode,
                 barcode: lastBarcode,
@@ -628,13 +622,17 @@ function onScanSuccess(decodedText) {
                 telegram_id: telegramId
             });
             
-            // Сбрасываем для следующей пары
+            // ✅ ВОЗВРАЩАЕМСЯ К СКАНИРОВАНИЮ DATAMATRIX (как было в оригинале)
             step = 'datamatrix';
             lastDatamatrixCode = null;
             extractedGtin = null;
             lastBarcode = null;
             updateScanHint();
         }
+    }
+    
+    if (isValid) {
+        updateScanHint();
     }
 }
 
@@ -652,34 +650,25 @@ async function sendToServer(logData) {
         const result = await response.json();
         
         if (result.status === "success") {
-            logToConsole('✅ Пара (DataMatrix + штрих-код) сохранена на сервере', 'success');
-            // Добавляем визуальную индикацию успеха
-            const lastItem = resultsEl.lastElementChild;
-            if (lastItem && lastItem.previousElementSibling) {
-                const prevItem = lastItem.previousElementSibling;
-                if (prevItem && prevItem.classList.contains('datamatrix-result')) {
-                    prevItem.innerHTML += '<div style="color:#00ff9d; font-size:11px; margin-top:4px;">📤 ОТПРАВЛЕНО</div>';
-                }
-            }
+            logToConsole('✅ Пара сохранена на сервере', 'success');
         } 
         else if (result.status === "duplicate") {
-            logToConsole('⚠️ Такая ПАРА (DataMatrix + штрих-код) уже существует в БД, дубликат не добавлен', 'warning');
+            logToConsole('⚠️ Такая пара уже сканировалась', 'warning');
             const lastItem = resultsEl.lastElementChild;
             if (lastItem && lastItem.previousElementSibling) {
                 const prevItem = lastItem.previousElementSibling;
                 if (prevItem && prevItem.classList.contains('datamatrix-result')) {
-                    prevItem.innerHTML += '<div style="color:#ffff00; font-size:11px; margin-top:4px;">⚠️ ДУБЛИКАТ (уже в БД)</div>';
+                    prevItem.innerHTML += '<div style="color:#ffff00; font-size:11px; margin-top:4px;">⚠️ УЖЕ СКАНИРОВАНО</div>';
                 }
             }
         } 
         else {
-            logToConsole(`❌ Ошибка сервера: ${JSON.stringify(result)}`, 'error');
+            logToConsole(`❌ Ошибка: ${JSON.stringify(result)}`, 'error');
         }
     } catch (err) {
         logToConsole(`❌ Ошибка сети: ${err.message}`, 'error');
     }
-}
-        
+}        
         function startScanner() {
             if (isScanning) return;
             
