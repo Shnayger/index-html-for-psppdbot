@@ -513,7 +513,7 @@
 
         // Обработчик сканирования - только УСПЕШНЫЕ сканирования
         function onScanSuccess(decodedText) {
-    const code = decodedText.trim();
+    const code = decodedText;
     const now = Date.now();
     
     if (code === lastScannedCode && (now - lastScanTime) < 800) {
