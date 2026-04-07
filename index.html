@@ -512,20 +512,19 @@
         }
 
         // Обработчик сканирования - только УСПЕШНЫЕ сканирования
-        function onScanSuccess(decodedText) {
-    const code = decodedText;
+       function onScanSuccess(decodedText) {
+    // Сохраняем ПОЛНЫЙ результат сканирования, без изменений
+    const rawCode = decodedText; // ← НЕ .trim(), НЕ substring, НЕ replace
+
     const now = Date.now();
-    
-    if (code === lastScannedCode && (now - lastScanTime) < 800) {
+    if (rawCode === lastScannedCode && (now - lastScanTime) < 800) {
         return;
     }
-    
-    lastScannedCode = code;
+    lastScannedCode = rawCode; // ← сохраняем как есть
     lastScanTime = now;
-    
-    logToConsole('━━━━━━━━━━━━━━━━━━━━', 'info');
-    logToConsole(`Сканировано: ${code}`, 'info');
-    logToConsole(`Длина: ${code.length} символов`, 'info');
+
+    logToConsole(`Сканировано: [${rawCode}]`, 'info');
+    logToConsole(`Длина: ${rawCode.length}`, 'info');
     
     let isValid = false;
     let result = null;
