@@ -666,19 +666,17 @@
         const result = await response.json();
         if (result.status === "success") {
             logToConsole('✅ Пара сохранена на сервере', 'success');
-            // Сохраняем локально для UX (опционально)
-            saveScannedPair(logData.datamatrix_code, logData.barcode);
+            // НИЧЕГО НЕ СОХРАНЯЕМ ЛОКАЛЬНО
         } 
         else if (result.status === "duplicate") {
             logToConsole('⚠️ Такая пара уже сканировалась', 'warning');
-            // Отображаем предупреждение в интерфейсе
             const lastItem = resultsEl.lastElementChild;
             if (lastItem) {
                 lastItem.innerHTML += '<div style="color:#ffff00; font-size:12px; margin-top:4px;">⚠️ УЖЕ СКАНИРОВАНО</div>';
             }
         } 
         else {
-            logToConsole(`❌ Сервер вернул: ${JSON.stringify(result)}`, 'error');
+            logToConsole(`❌ Ошибка: ${JSON.stringify(result)}`, 'error');
         }
     } catch (err) {
         logToConsole(`❌ Ошибка сети: ${err.message}`, 'error');
