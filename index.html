@@ -418,6 +418,7 @@
                 type: 'si',
                 display: `СИ: ${code}`,
                 details: `GTIN: ${gtin} (${gtin.length} цифр)`,
+                fullCode: code,
                 gtin: gtin,
                 fullCode: code  // ← ДОБАВИТЬ полный код
             };
@@ -426,6 +427,7 @@
                 type: 'si',
                 display: `СИ: ${code}`,
                 details: `GTIN не найден`,
+                fullCode: code,
                 raw: code,
                 fullCode: code  // ← ДОБАВИТЬ полный код
             };
@@ -539,7 +541,7 @@
                 isValid = true;
                 addResult(result.display, 'datamatrix', result.details);
                 expectedGtin = (result.type === 'si') ? result.gtin : null;
-                lastFullDataMatrixCode = result.fullCode || code;
+                lastFullDataMatrixCode = code;
                 step = 'barcode';
                 playSound('success');
                 showScanFeedback(true, 'datamatrix');
