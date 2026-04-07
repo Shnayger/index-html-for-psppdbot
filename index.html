@@ -539,7 +539,7 @@
                 isValid = true;
                 addResult(result.display, 'datamatrix', result.details);
                 expectedGtin = (result.type === 'si') ? result.gtin : null;
-                lastFullDataMatrixCode = result.fullCode;
+                lastFullDataMatrixCode = result.fullCode || code;
                 step = 'barcode';
                 playSound('success');
                 showScanFeedback(true, 'datamatrix');
