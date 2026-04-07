@@ -487,6 +487,19 @@ function analyzeDataMatrix(code) {
             }
         }
 
+// Визуальная обратная связь
+function showScanFeedback(success, type) {
+    const color = success ? (type === 'datamatrix' ? '#00ff9d' : '#4da6ff') : '#ff4444';
+    
+    scanHintEl.style.background = `rgba(${type === 'datamatrix' ? '0,80,0' : '0,0,80'}, 0.9)`;
+    scanHintEl.style.boxShadow = `0 4px 15px ${color}40`;
+    
+    setTimeout(() => {
+        scanHintEl.style.background = 'rgba(0, 0, 0, 0.8)';
+        scanHintEl.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.5)';
+    }, 300);
+}
+        
         // Основная функция обработки сканирования
 // Основная функция обработки сканирования - С СОХРАНЕНИЕМ ОРИГИНАЛЬНОЙ ЛОГИКИ ПЕРЕКЛЮЧЕНИЯ
 function onScanSuccess(decodedText) {
