@@ -355,22 +355,6 @@
             }
         }
 
-        // Конфигурация сканера
-        const config = {
-            fps: 10,
-            qrbox: {
-                width: 250,
-                height: 250
-            },
-            rememberLastUsedCamera: true,
-            formatsToSupport: [
-                Html5QrcodeSupportedFormats.DATA_MATRIX,
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.QR_CODE
-            ]
-        };
-
         // Инициализация сканера
         const html5QrCode = new Html5Qrcode("qr-reader");
         let isScanning = false;
@@ -537,6 +521,13 @@
                 addResult(result.display, 'datamatrix', result.details);
                 expectedGtin = (result.type === 'si') ? result.gtin : null;
                 step = 'barcode';
+                // Перезапуск сканера для штрих-кода
+if (isScanning) {
+    html5QrCode.stop().then(() => {
+        isScanning = false;
+        setTimeout(startScanner, 300);
+    });
+}
                 playSound('success');
                 showScanFeedback(true, 'datamatrix');
                 logToConsole(`✅ Принят: ${result.type.toUpperCase()}`, 'success');
@@ -611,6 +602,13 @@
         });
 
         step = 'datamatrix';
+        // Перезапуск сканера для DataMatrix
+if (isScanning) {
+    html5QrCode.stop().then(() => {
+        isScanning = false;
+        setTimeout(startScanner, 300);
+    });
+}
         expectedGtin = null;
         playSound('success');
         showScanFeedback(true, 'barcode');
@@ -666,30 +664,35 @@
     }
 }
         
-        function startScanner() {
-            if (isScanning) return;
-            
-            logToConsole('Запуск сканера...', 'info');
-            
-            html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                () => {
-                    // ПУСТАЯ ФУНКЦИЯ - все ошибки сканирования игнорируются
-                    // Библиотека будет вызывать эту функцию постоянно при отсутствии кода,
-                    // но мы ничего не делаем и не логируем
-                }
-            ).then(() => {
-                isScanning = true;
-                logToConsole('✅ Сканер запущен', 'success');
-            }).catch(err => {
-                // Только критические ошибки запуска камеры
-                logToConsole(`❌ Ошибка запуска камеры: ${err.message || err}`, 'error');
-                scanHintEl.textContent = 'Ошибка камеры';
-                scanHintEl.style.color = '#ff4444';
-            });
-        }
+       function startScanner() {
+    if (isScanning) return;
+    
+    logToConsole('Запуск сканера...', 'info');
+    
+    // Динамическая конфигурация
+    const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        rememberLastUsedCamera: true,
+        formatsToSupport: step === 'datamatrix'
+            ? [Html5QrcodeSupportedFormats.DATA_MATRIX]
+            : [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128]
+    };
+
+    html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        onScanSuccess,
+        () => {}
+    ).then(() => {
+        isScanning = true;
+        logToConsole('✅ Сканер запущен', 'success');
+    }).catch(err => {
+        logToConsole(`❌ Ошибка запуска камеры: ${err.message || err}`, 'error');
+        scanHintEl.textContent = 'Ошибка камеры';
+        scanHintEl.style.color = '#ff4444';
+    });
+}
 
         // Обработчики кнопок
         document.getElementById('clear-btn').onclick = () => {
