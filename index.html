@@ -556,12 +556,11 @@
     if (/^\d{12}$/.test(code)) {
         y_norm = '0' + code; // UPC → EAN-13
     }
-    // Для EAN-8 или других — оставляем как есть (сравнение не пройдёт)
 
     const is_success = (expectedGtin === y_norm);
-
     isValid = true;
     const displayCode = y_norm;
+
     addResult(`Штрих-код: ${displayCode}`, 'barcode', `Нормализован: ${displayCode}`);
 
     if (is_success) {
@@ -584,8 +583,8 @@
     const telegramId = user?.id || 0;
 
     sendToServer({
-        datamatrix_code: lastScannedCode, // полный DataMatrix
-        barcode: displayCode,             // нормализованный до 13 цифр
+        datamatrix_code: lastScannedCode,
+        barcode: displayCode,
         is_success: is_success,
         user_full_name: fullName,
         telegram_id: telegramId
@@ -597,16 +596,7 @@
     showScanFeedback(true, 'barcode');
     logToConsole(`✅ Принят: ШТРИХ-КОД (${displayCode})`, 'success');
 }
-    else if (/^[A-Za-z0-9]{8,20}$/.test(code)) {
-        // Обработка нечисловых штрих-кодов (CODE128 и др.)
-        isValid = true;
-        addResult(`Штрих-код: ${code}`, 'barcode');
-        step = 'datamatrix';
-        expectedGtin = null;
-        playSound('success');
-        showScanFeedback(true, 'barcode');
-        logToConsole(`✅ Принят: ШТРИХ-КОД (альфа-цифровой)`, 'success');
-    }
+// ← НИЧЕГО БОЛЬШЕ ПОСЛЕ ЭТОГО БЛОКА ДЛЯ step === 'barcode'
     else {
         logToConsole(`❌ Не распознан как штрих-код (${code.length} символов)`, 'error');
     }
