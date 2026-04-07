@@ -511,7 +511,6 @@
             }
         }
 
-        // Обработчик сканирования - только УСПЕШНЫЕ сканирования
         function onScanSuccess(decodedText) {
     const code = decodedText;
     const now = Date.now();
@@ -533,18 +532,10 @@
     if (step === 'datamatrix') {
         if (code.length >= 20 && code.length <= 50) {
             result = analyzeDataMatrix(code);
-            
             if (result) {
                 isValid = true;
                 addResult(result.display, 'datamatrix', result.details);
-                
-                // Сохраняем GTIN, если это СИ
-                if (result.type === 'si') {
-                    expectedGtin = result.gtin;
-                } else {
-                    expectedGtin = null;
-                }
-                
+                expectedGtin = (result.type === 'si') ? result.gtin : null;
                 step = 'barcode';
                 playSound('success');
                 showScanFeedback(true, 'datamatrix');
@@ -557,110 +548,79 @@
         }
     } 
     else if (step === 'barcode') {
-    let normalizedBarcode = code;
-
-    // Нормализация UPC (12 цифр) → EAN-13
-    if (/^\d{12}$/.test(code)) {
-        normalizedBarcode = '0' + code;
-        logToConsole(`⚠️ Возможен EAN-13: ${normalizedBarcode} (добавлен ведущий 0)`, 'warning');
-    }
-
-    let isValid = false;
-    let is_success = false;
-    let displayCode = normalizedBarcode;
-    let typeLabel = '';
-
-    // Обработка поддерживаемых форматов
-    if (/^\d{13}$/.test(normalizedBarcode)) {
-        typeLabel = 'EAN-13';
-        isValid = true;
-
-        // Сравнение ТОЛЬКО если был СИ (expectedGtin !== null)
-        if (expectedGtin && /^\d{13}$/.test(expectedGtin)) {
-            is_success = (expectedGtin === normalizedBarcode);
-        } else {
-            is_success = false;
+        let normalizedBarcode = code;
+        if (/^\d{12}$/.test(code)) {
+            normalizedBarcode = '0' + code;
+            logToConsole(`⚠️ Возможен EAN-13: ${normalizedBarcode} (добавлен ведущий 0)`, 'warning');
         }
-    }
-    else if (/^\d{8}$/.test(code)) {
-        typeLabel = 'EAN-8';
-        displayCode = code;
-        isValid = true;
-        is_success = false; // EAN-8 не сравниваем
-    }
-    else if (/^[A-Za-z0-9]{8,20}$/.test(code)) {
-        typeLabel = 'альфа-цифровой';
-        displayCode = code;
-        isValid = true;
-        is_success = false;
-    }
-    else {
-        logToConsole(`❌ Не распознан как штрих-код (${code.length} символов)`, 'error');
-        return; // не меняем шаг
-    }
 
-    // Отображение результата
-    addResult(`Штрих-код: ${displayCode}`, 'barcode', typeLabel);
+        let is_success = false;
+        let displayCode = normalizedBarcode;
+        let typeLabel = '';
 
-    // Обратная связь по совпадению
-    if (typeLabel === 'EAN-13') {
-        if (is_success) {
-            logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${displayCode})`, 'success');
-            const lastItem = resultsEl.lastElementChild;
-            if (lastItem) {
-                lastItem.innerHTML += '<div style="color:#00ff9d; font-size:12px; margin-top:4px;">✅ СОВПАДЕНИЕ</div>';
-            }
-        } else {
-            logToConsole(`❌ НЕ УСПЕШНО: СИ=${expectedGtin || '—'}, ШК=${displayCode}`, 'error');
-            const lastItem = resultsEl.lastElementChild;
-            if (lastItem) {
-                lastItem.innerHTML += '<div style="color:#ff4444; font-size:12px; margin-top:4px;">❌ НЕ СОВПАДАЕТ</div>';
+        if (/^\d{13}$/.test(normalizedBarcode)) {
+            typeLabel = 'EAN-13';
+            isValid = true;
+            if (expectedGtin && /^\d{13}$/.test(expectedGtin)) {
+                is_success = (expectedGtin === normalizedBarcode);
             }
         }
-    }
+        else if (/^\d{8}$/.test(code)) {
+            typeLabel = 'EAN-8';
+            displayCode = code;
+            isValid = true;
+        }
+        else if (/^[A-Za-z0-9]{8,20}$/.test(code)) {
+            typeLabel = 'альфа-цифровой';
+            displayCode = code;
+            isValid = true;
+        }
+        else {
+            logToConsole(`❌ Не распознан как штрих-код (${code.length} символов)`, 'error');
+            return;
+        }
 
-    // Отправка на сервер
-    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-    const fullName = user ? `${user.last_name || ''} ${user.first_name || ''}`.trim() || `ID${user.id}` : "Неизвестно";
-    const telegramId = user?.id || 0;
+        addResult(`Штрих-код: ${displayCode}`, 'barcode', typeLabel);
 
-    sendToServer({
-        datamatrix_code: lastScannedCode, // полный DataMatrix
-        barcode: displayCode,             // нормализованный или как есть
-        is_success: is_success,
-        user_full_name: fullName,
-        telegram_id: telegramId
-    });
+        if (typeLabel === 'EAN-13') {
+            if (is_success) {
+                logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${displayCode})`, 'success');
+                const lastItem = resultsEl.lastElementChild;
+                if (lastItem) {
+                    lastItem.innerHTML += '<div style="color:#00ff9d; font-size:12px; margin-top:4px;">✅ СОВПАДЕНИЕ</div>';
+                }
+            } else {
+                logToConsole(`❌ НЕ УСПЕШНО: СИ=${expectedGtin || '—'}, ШК=${displayCode}`, 'error');
+                const lastItem = resultsEl.lastElementChild;
+                if (lastItem) {
+                    lastItem.innerHTML += '<div style="color:#ff4444; font-size:12px; margin-top:4px;">❌ НЕ СОВПАДАЕТ</div>';
+                }
+            }
+        }
 
-    // Сброс состояния
-    step = 'datamatrix';
-    expectedGtin = null;
-    playSound('success');
-    showScanFeedback(true, 'barcode');
-    logToConsole(`✅ Принят: ШТРИХ-КОД (${displayCode})`, 'success');
+        const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+        const fullName = user ? `${user.last_name || ''} ${user.first_name || ''}`.trim() || `ID${user.id}` : "Неизвестно";
+        const telegramId = user?.id || 0;
 
-    updateScanHint();
-}
-    else if (/^[A-Za-z0-9]{8,20}$/.test(code)) {
-        // Обработка нечисловых штрих-кодов (CODE128 и др.)
-        isValid = true;
-        addResult(`Штрих-код: ${code}`, 'barcode');
+        sendToServer({
+            datamatrix_code: lastScannedCode,
+            barcode: displayCode,
+            is_success: is_success,
+            user_full_name: fullName,
+            telegram_id: telegramId
+        });
+
         step = 'datamatrix';
         expectedGtin = null;
         playSound('success');
         showScanFeedback(true, 'barcode');
-        logToConsole(`✅ Принят: ШТРИХ-КОД (альфа-цифровой)`, 'success');
+        logToConsole(`✅ Принят: ШТРИХ-КОД (${displayCode})`, 'success');
     }
-    else {
-        logToConsole(`❌ Не распознан как штрих-код (${code.length} символов)`, 'error');
-    }
-}
     
     if (isValid) {
         updateScanHint();
     }
 }
-
         // Визуальная обратная связь
         function showScanFeedback(success, type) {
             const color = success ? (type === 'datamatrix' ? '#00ff9d' : '#4da6ff') : '#ff4444';
