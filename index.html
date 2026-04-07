@@ -377,76 +377,85 @@
         let lastScannedCode = '';
         let lastScanTime = 0;
 
-        // Функция анализа DataMatrix
         function analyzeDataMatrix(code) {
-            const length = code.length;
-            
-            // 1. УКЗ - 30 символов
-            if (length === 30) {
-                logToConsole('Обнаружен УКЗ (30 символов)', 'success');
-                
-                // Извлекаем номер и серию
-                const number = code.substring(18, 27);
-                const series = code.substring(27, 30);
-                
-                return {
-                    type: 'ukz',
-                    display: `УКЗ: ${code}`,
-                    details: `Номер: ${number}, Серия: ${series}`,
-                    number: number,
-                    series: series
-                };
-            }
-            
-            // 2. СИ - 35 символов
-            else if (length >= 32 && length <= 39) {
-                logToConsole('Обнаружен СИ (35 символов)', 'success');
-                
-                const gtin = code.substring(4, 17);
-                
-                if (/^\d{13}$/.test(gtin)) {
-                    return {
-                        type: 'si',
-                        display: `СИ: ${code}`,
-                        details: `GTIN: ${gtin}`,
-                        gtin: gtin
-                    };
-                } else {
-                    return {
-                        type: 'si',
-                        display: `СИ: ${code}`,
-                        details: `Длина: 35 символов`,
-                        raw: code
-                    };
+    const length = code.length;
+    
+    // 1. УКЗ — строго 30 символов
+    if (length === 30) {
+        logToConsole('Обнаружен УКЗ (30 символов)', 'success');
+        const number = code.substring(18, 27);
+        const series = code.substring(27, 30);
+        return {
+            type: 'ukz',
+            display: `УКЗ: ${code}`,
+            details: `Номер: ${number}, Серия: ${series}`,
+            number: number,
+            series: series
+        };
+    }
+    
+    // 2. СИ — длина от 33 до 50 символов
+    else if (length >= 33 && length <= 50) {
+        logToConsole(`Обнаружен СИ (${length} символов)`, 'success');
+        
+        // GTIN начинается с позиции 4 (индекс 4 → 5-й символ)
+        // Возможные длины: 8, 12, 13, 14
+        let gtin = null;
+        const possibleLengths = [14, 13, 12, 8]; // проверяем от самого длинного
+        
+        for (const len of possibleLengths) {
+            if (length >= 4 + len) {
+                const candidate = code.substring(4, 4 + len);
+                if (/^\d+$/.test(candidate)) { // только цифры
+                    gtin = candidate;
+                    break;
                 }
             }
-            
-            // 3. Стикеры - 22 цифры
-            else if (length === 22 && /^\d{22}$/.test(code)) {
-                const id = code.substring(0, 9);
-                const gtin = code.substring(9, 22);
-                return {
-                    type: 'stickers',
-                    display: `Стикер: ${code}`,
-                    details: `ID: ${id}, GTIN: ${gtin}`,
-                    id: id,
-                    gtin: gtin
-                };
-            }
-            
-            // 4. Любой другой DataMatrix
-            else if (length >= 20 && length <= 50) {
-                logToConsole(`DataMatrix (${length} символов)`, 'info');
-                return {
-                    type: 'datamatrix',
-                    display: `DataMatrix: ${code}`,
-                    details: `Длина: ${length} символов`,
-                    raw: code
-                };
-            }
-            
-            return null;
         }
+        
+        if (gtin) {
+            return {
+                type: 'si',
+                display: `СИ: ${code}`,
+                details: `GTIN: ${gtin} (${gtin.length} цифр)`,
+                gtin: gtin
+            };
+        } else {
+            return {
+                type: 'si',
+                display: `СИ: ${code}`,
+                details: `GTIN не найден`,
+                raw: code
+            };
+        }
+    }
+    
+    // 3. Стикеры — 22 цифры
+    else if (length === 22 && /^\d{22}$/.test(code)) {
+        const id = code.substring(0, 9);
+        const gtin = code.substring(9, 22);
+        return {
+            type: 'stickers',
+            display: `Стикер: ${code}`,
+            details: `ID: ${id}, GTIN: ${gtin}`,
+            id: id,
+            gtin: gtin
+        };
+    }
+    
+    // 4. Любой другой DataMatrix
+    else if (length >= 20 && length <= 50) {
+        logToConsole(`DataMatrix (${length} символов)`, 'info');
+        return {
+            type: 'datamatrix',
+            display: `DataMatrix: ${code}`,
+            details: `Длина: ${length} символов`,
+            raw: code
+        };
+    }
+    
+    return null;
+}
 
         // Функция добавления результата
         function addResult(text, type, details = '') {
@@ -553,7 +562,19 @@
     addResult(`Штрих-код: ${code}`, 'barcode', `EAN-13: ${code}`);
     
     // === ПРОВЕРКА СОВПАДЕНИЯ GTIN ИЗ СИ ===
-const is_success = expectedGtin && expectedGtin === code;
+// Функция нормализации GTIN: убирает ведущие нули при сравнении GTIN-13 ↔ GTIN-14
+function normalizeGtin(gtin) {
+    // Если GTIN-14 и начинается с 0 → можно сравнивать как GTIN-13
+    if (gtin.length === 14 && gtin.startsWith('0')) {
+        return gtin.substring(1); // 01234567890123 → 1234567890123
+    }
+    return gtin;
+}
+
+const normalizedExpected = expectedGtin ? normalizeGtin(expectedGtin) : null;
+const normalizedBarcode = normalizeGtin(code);
+const is_success = normalizedExpected && normalizedExpected === normalizedBarcode;
+            
 if (is_success) {
     logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${code})`, 'success');
     const lastItem = resultsEl.lastElementChild;
