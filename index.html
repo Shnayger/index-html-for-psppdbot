@@ -557,79 +557,81 @@
         }
     } 
     else if (step === 'barcode') {
-        if (/^\d{13}$/.test(code)) {
-    isValid = true;
-    addResult(`Штрих-код: ${code}`, 'barcode', `EAN-13: ${code}`);
-    
-    // === ПРОВЕРКА СОВПАДЕНИЯ GTIN ИЗ СИ ===
-// Функция нормализации GTIN: убирает ведущие нули при сравнении GTIN-13 ↔ GTIN-14
-function normalizeGtin(gtin) {
-    // Если GTIN-14 и начинается с 0 → можно сравнивать как GTIN-13
-    if (gtin.length === 14 && gtin.startsWith('0')) {
-        return gtin.substring(1); // 01234567890123 → 1234567890123
-    }
-    return gtin;
-}
+    let normalizedBarcode = code;
 
-const normalizedExpected = expectedGtin ? normalizeGtin(expectedGtin) : null;
-const normalizedBarcode = normalizeGtin(code);
-const is_success = normalizedExpected && normalizedExpected === normalizedBarcode;
-            
-if (is_success) {
-    logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${code})`, 'success');
-    const lastItem = resultsEl.lastElementChild;
-    if (lastItem) {
-        lastItem.innerHTML += '<div style="color:#00ff9d; font-size:12px; margin-top:4px;">✅ СОВПАДЕНИЕ</div>';
+    // Если получили 12 цифр — возможно, это EAN-13 с обрезанным ведущим нулём
+    if (/^\d{12}$/.test(code)) {
+        // Попробуем добавить ведущий ноль → 13 цифр
+        normalizedBarcode = '0' + code;
+        logToConsole(`⚠️ Возможен EAN-13: ${normalizedBarcode} (добавлен ведущий 0)`, 'warning');
     }
-} else {
-    logToConsole(`❌ НЕ УСПЕШНО: СИ=${expectedGtin}, ШК=${code}`, 'error');
-    const lastItem = resultsEl.lastElementChild;
-    if (lastItem) {
-        lastItem.innerHTML += '<div style="color:#ff4444; font-size:12px; margin-top:4px;">❌ НЕ СОВПАДАЕТ</div>';
+
+    // Поддерживаемые форматы: EAN-13 (13), EAN-8 (8), UPC (12 → нормализуем до 13)
+    if (/^\d{13}$/.test(normalizedBarcode) || /^\d{8}$/.test(code)) {
+        isValid = true;
+        const displayCode = /^\d{13}$/.test(normalizedBarcode) ? normalizedBarcode : code;
+        const typeLabel = normalizedBarcode.length === 13 ? 'EAN-13' : 'EAN-8';
+        addResult(`Штрих-код: ${displayCode}`, 'barcode', `${typeLabel}: ${displayCode}`);
+
+        // === СРАВНЕНИЕ С GTIN ИЗ СИ ===
+        function normalizeGtin(gtin) {
+            if (gtin?.length === 14 && gtin.startsWith('0')) {
+                return gtin.substring(1); // GTIN-14 → GTIN-13
+            }
+            return gtin || '';
+        }
+
+        const expectedNormalized = normalizeGtin(expectedGtin);
+        const barcodeNormalized = normalizeGtin(normalizedBarcode);
+        const is_success = expectedNormalized === barcodeNormalized;
+
+        if (is_success) {
+            logToConsole(`✅ УСПЕШНО: СИ и штрих-код совпадают (${displayCode})`, 'success');
+            const lastItem = resultsEl.lastElementChild;
+            if (lastItem) {
+                lastItem.innerHTML += '<div style="color:#00ff9d; font-size:12px; margin-top:4px;">✅ СОВПАДЕНИЕ</div>';
+            }
+        } else {
+            logToConsole(`❌ НЕ УСПЕШНО: СИ=${expectedGtin}, ШК=${displayCode}`, 'error');
+            const lastItem = resultsEl.lastElementChild;
+            if (lastItem) {
+                lastItem.innerHTML += '<div style="color:#ff4444; font-size:12px; margin-top:4px;">❌ НЕ СОВПАДАЕТ</div>';
+            }
+        }
+
+        // Отправка на сервер
+        const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+        const fullName = user ? `${user.last_name || ''} ${user.first_name || ''}`.trim() || `ID${user.id}` : "Неизвестно";
+        const telegramId = user?.id || 0;
+
+        sendToServer({
+            datamatrix_code: lastScannedCode,
+            barcode: displayCode, // отправляем нормализованный (13 цифр)
+            is_success: is_success,
+            user_full_name: fullName,
+            telegram_id: telegramId
+        });
+
+        step = 'datamatrix';
+        expectedGtin = null;
+        playSound('success');
+        showScanFeedback(true, 'barcode');
+        logToConsole(`✅ Принят: ШТРИХ-КОД (${displayCode})`, 'success');
+    }
+    else if (/^[A-Za-z0-9]{8,20}$/.test(code)) {
+        // Обработка нечисловых штрих-кодов (CODE128 и др.)
+        isValid = true;
+        addResult(`Штрих-код: ${code}`, 'barcode');
+        step = 'datamatrix';
+        expectedGtin = null;
+        playSound('success');
+        showScanFeedback(true, 'barcode');
+        logToConsole(`✅ Принят: ШТРИХ-КОД (альфа-цифровой)`, 'success');
+    }
+    else {
+        logToConsole(`❌ Не распознан как штрих-код (${code.length} символов)`, 'error');
     }
 }
-
-// === ОТПРАВКА НА СЕРВЕР ===
-const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-const fullName = user ? `${user.last_name || ''} ${user.first_name || ''}`.trim() || `ID${user.id}` : "Неизвестно";
-const telegramId = user?.id || 0;
-
-sendToServer({
-    datamatrix_code: lastScannedCode,
-    barcode: code,
-    is_success: is_success,
-    user_full_name: fullName,
-    telegram_id: telegramId
-});
-// ===================================
-    step = 'datamatrix';
-    expectedGtin = null;
-    playSound('success');
-    showScanFeedback(true, 'barcode');
-    logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
-}
-        else if (/^\d{8}$/.test(code)) {
-            isValid = true;
-            addResult(`Штрих-код: ${code}`, 'barcode', `EAN-8: ${code}`);
-            step = 'datamatrix';
-            expectedGtin = null;
-            playSound('success');
-            showScanFeedback(true, 'barcode');
-            logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
-        }
-        else if (/^[A-Za-z0-9]{8,20}$/.test(code)) {
-            isValid = true;
-            addResult(`Штрих-код: ${code}`, 'barcode');
-            step = 'datamatrix';
-            expectedGtin = null;
-            playSound('success');
-            showScanFeedback(true, 'barcode');
-            logToConsole(`✅ Принят: ШТРИХ-КОД`, 'success');
-        }
-        else {
-            logToConsole(`❌ Не распознан как штрих-код`, 'error');
-        }
-    }
     
     if (isValid) {
         updateScanHint();
