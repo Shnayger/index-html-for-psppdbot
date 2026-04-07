@@ -337,6 +337,7 @@
         let step = 'datamatrix';
         let scanCount = 0;
         let expectedGtin = null;
+        let lastFullDataMatrixCode = '';
         const resultsEl = document.getElementById('results');
         const resultsContainer = document.getElementById('results-container');
         const scanHintEl = document.getElementById('scan-hint');
@@ -390,7 +391,8 @@
             display: `УКЗ: ${code}`,
             details: `Номер: ${number}, Серия: ${series}`,
             number: number,
-            series: series
+            series: series,
+            fullCode: code  // ← ДОБАВИТЬ полный код
         };
     }
     
@@ -398,15 +400,13 @@
     else if (length >= 33 && length <= 50) {
         logToConsole(`Обнаружен СИ (${length} символов)`, 'success');
         
-        // GTIN начинается с позиции 4 (индекс 4 → 5-й символ)
-        // Возможные длины: 8, 12, 13, 14
         let gtin = null;
-        const possibleLengths = [14, 13, 12, 8]; // проверяем от самого длинного
+        const possibleLengths = [14, 13, 12, 8];
         
         for (const len of possibleLengths) {
             if (length >= 4 + len) {
                 const candidate = code.substring(4, 4 + len);
-                if (/^\d+$/.test(candidate)) { // только цифры
+                if (/^\d+$/.test(candidate)) {
                     gtin = candidate;
                     break;
                 }
@@ -418,14 +418,16 @@
                 type: 'si',
                 display: `СИ: ${code}`,
                 details: `GTIN: ${gtin} (${gtin.length} цифр)`,
-                gtin: gtin
+                gtin: gtin,
+                fullCode: code  // ← ДОБАВИТЬ полный код
             };
         } else {
             return {
                 type: 'si',
                 display: `СИ: ${code}`,
                 details: `GTIN не найден`,
-                raw: code
+                raw: code,
+                fullCode: code  // ← ДОБАВИТЬ полный код
             };
         }
     }
@@ -439,7 +441,8 @@
             display: `Стикер: ${code}`,
             details: `ID: ${id}, GTIN: ${gtin}`,
             id: id,
-            gtin: gtin
+            gtin: gtin,
+            fullCode: code  // ← ДОБАВИТЬ полный код
         };
     }
     
@@ -450,13 +453,13 @@
             type: 'datamatrix',
             display: `DataMatrix: ${code}`,
             details: `Длина: ${length} символов`,
-            raw: code
+            raw: code,
+            fullCode: code  // ← ДОБАВИТЬ полный код
         };
     }
     
     return null;
 }
-
         // Функция добавления результата
         function addResult(text, type, details = '') {
             const emptyMessage = resultsEl.querySelector('.empty-results');
@@ -536,6 +539,7 @@
                 isValid = true;
                 addResult(result.display, 'datamatrix', result.details);
                 expectedGtin = (result.type === 'si') ? result.gtin : null;
+                lastFullDataMatrixCode = result.fullCode;
                 step = 'barcode';
                 playSound('success');
                 showScanFeedback(true, 'datamatrix');
@@ -603,7 +607,7 @@
         const telegramId = user?.id || 0;
 
         sendToServer({
-            datamatrix_code: lastScannedCode,
+            datamatrix_code: lastFullDataMatrixCode,
             barcode: displayCode,
             is_success: is_success,
             user_full_name: fullName,
@@ -636,7 +640,7 @@
 
         // Начало сканирования - ОШИБКИ ПОЛНОСТЬЮ ИГНОРИРУЮТСЯ
 
-        async function sendToServer(logData) {
+async function sendToServer(logData) {
     const serverUrl = 'https://shutoutlab.boats/api/log-verification';
     
     try {
@@ -649,7 +653,6 @@
         const result = await response.json();
         if (result.status === "success") {
             logToConsole('✅ Пара сохранена на сервере', 'success');
-            // НИЧЕГО НЕ СОХРАНЯЕМ ЛОКАЛЬНО
         } 
         else if (result.status === "duplicate") {
             logToConsole('⚠️ Такая пара уже сканировалась', 'warning');
