@@ -378,6 +378,25 @@
         let lastScannedCode = '';
         let lastScanTime = 0;
 
+        // Функция очистки DataMatrix от управляющих символов
+function cleanDataMatrixCode(rawCode) {
+    if (!rawCode) return '';
+    
+    // Удаляем все непечатаемые символы (ASCII 0-31, кроме пробела)
+    // Оставляем только: цифры, буквы, пробел, тире, точки
+    let cleaned = rawCode.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    
+    // Дополнительно: заменяем GS (ASCII 29), RS (30), US (31) на пробел или пустоту
+    cleaned = cleaned.replace(/[\x1D\x1E\x1F]/g, '');
+    
+    // Иногда FNC1 приходит как символ \x1D или \x1C
+    cleaned = cleaned.replace(/[\x1C]/g, '');
+    
+    logToConsole(`Оригинал: ${rawCode.length} символов, непечатаемых: ${rawCode.length - cleaned.length}`, 'warning');
+    
+    return cleaned;
+}
+        
         function analyzeDataMatrix(code) {
     const length = code.length;
     const originalCode = code; // СОХРАНЯЕМ ОРИГИНАЛ
@@ -540,11 +559,15 @@
             isValid = true;
             addResult(result.display, 'datamatrix', result.details);
             expectedGtin = (result.type === 'si') ? result.gtin : null;
-            lastFullDataMatrixCode = code;  // ← ЭТА СТРОКА УЖЕ ПРАВИЛЬНАЯ (сохраняет оригинал)
+            
+            // ОЧИЩАЕМ ОТ УПРАВЛЯЮЩИХ СИМВОЛОВ
+            lastFullDataMatrixCode = cleanDataMatrixCode(code);
+            
             step = 'barcode';
             playSound('success');
             showScanFeedback(true, 'datamatrix');
             logToConsole(`✅ Принят: ${result.type.toUpperCase()}`, 'success');
+            logToConsole(`Очищенный код: ${lastFullDataMatrixCode}`, 'success');
         } else {
             logToConsole(`❌ Не удалось определить тип DataMatrix`, 'error');
         }
