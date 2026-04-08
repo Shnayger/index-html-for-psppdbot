@@ -380,6 +380,7 @@
 
         function analyzeDataMatrix(code) {
     const length = code.length;
+    const originalCode = code; // СОХРАНЯЕМ ОРИГИНАЛ
     
     // 1. УКЗ — строго 30 символов
     if (length === 30) {
@@ -392,7 +393,7 @@
             details: `Номер: ${number}, Серия: ${series}`,
             number: number,
             series: series,
-            fullCode: code  // ← ДОБАВИТЬ полный код
+            originalCode: originalCode  // ← ОРИГИНАЛ
         };
     }
     
@@ -418,18 +419,16 @@
                 type: 'si',
                 display: `СИ: ${code}`,
                 details: `GTIN: ${gtin} (${gtin.length} цифр)`,
-                fullCode: code,
-                gtin: gtin,
-                fullCode: code  // ← ДОБАВИТЬ полный код
+                originalCode: originalCode,  // ← ОРИГИНАЛ
+                gtin: gtin
             };
         } else {
             return {
                 type: 'si',
                 display: `СИ: ${code}`,
                 details: `GTIN не найден`,
-                fullCode: code,
-                raw: code,
-                fullCode: code  // ← ДОБАВИТЬ полный код
+                originalCode: originalCode,  // ← ОРИГИНАЛ
+                raw: code
             };
         }
     }
@@ -444,7 +443,7 @@
             details: `ID: ${id}, GTIN: ${gtin}`,
             id: id,
             gtin: gtin,
-            fullCode: code  // ← ДОБАВИТЬ полный код
+            originalCode: originalCode  // ← ОРИГИНАЛ
         };
     }
     
@@ -456,7 +455,7 @@
             display: `DataMatrix: ${code}`,
             details: `Длина: ${length} символов`,
             raw: code,
-            fullCode: code  // ← ДОБАВИТЬ полный код
+            originalCode: originalCode  // ← ОРИГИНАЛ
         };
     }
     
@@ -535,24 +534,24 @@
     let result = null;
 
     if (step === 'datamatrix') {
-        if (code.length >= 20 && code.length <= 50) {
-            result = analyzeDataMatrix(code);
-            if (result) {
-                isValid = true;
-                addResult(result.display, 'datamatrix', result.details);
-                expectedGtin = (result.type === 'si') ? result.gtin : null;
-                lastFullDataMatrixCode = code;
-                step = 'barcode';
-                playSound('success');
-                showScanFeedback(true, 'datamatrix');
-                logToConsole(`✅ Принят: ${result.type.toUpperCase()}`, 'success');
-            } else {
-                logToConsole(`❌ Не удалось определить тип DataMatrix`, 'error');
-            }
+    if (code.length >= 20 && code.length <= 50) {
+        result = analyzeDataMatrix(code);
+        if (result) {
+            isValid = true;
+            addResult(result.display, 'datamatrix', result.details);
+            expectedGtin = (result.type === 'si') ? result.gtin : null;
+            lastFullDataMatrixCode = code;  // ← ЭТА СТРОКА УЖЕ ПРАВИЛЬНАЯ (сохраняет оригинал)
+            step = 'barcode';
+            playSound('success');
+            showScanFeedback(true, 'datamatrix');
+            logToConsole(`✅ Принят: ${result.type.toUpperCase()}`, 'success');
         } else {
-            logToConsole(`❌ Не DataMatrix (длина ${code.length})`, 'error');
+            logToConsole(`❌ Не удалось определить тип DataMatrix`, 'error');
         }
-    } 
+    } else {
+        logToConsole(`❌ Не DataMatrix (длина ${code.length})`, 'error');
+    }
+}
     else if (step === 'barcode') {
         let normalizedBarcode = code;
         if (/^\d{12}$/.test(code)) {
