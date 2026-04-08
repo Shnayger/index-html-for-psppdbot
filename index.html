@@ -460,7 +460,7 @@ function cleanDataMatrixCode(rawCode) {
         
         function analyzeDataMatrix(code) {
     const length = code.length;
-    const originalCode = code; // СОХРАНЯЕМ ОРИГИНАЛ
+    const originalCode = code;
     
     // 1. УКЗ — строго 30 символов
     if (length === 30) {
@@ -473,78 +473,78 @@ function cleanDataMatrixCode(rawCode) {
             details: `Номер: ${number}, Серия: ${series}`,
             number: number,
             series: series,
-            originalCode: originalCode  // ← ОРИГИНАЛ
+            originalCode: originalCode,
+            gtin: null  // УКЗ не содержит GTIN
         };
     }
     
-    // 2. СИ — длина от 33 до 50 символов
-    else if (length >= 33 && length <= 50) {
-    logToConsole(`Обнаружен СИ (${length} символов)`, 'success');
-    
-    let gtin = extractGtinFromGs1(code);  // ← НОВАЯ ФУНКЦИЯ
-    
-    // Если не нашли, пробуем старый метод
-    if (!gtin) {
-        const possibleLengths = [14, 13, 12, 8];
-        for (const len of possibleLengths) {
-            if (length >= 4 + len) {
-                const candidate = code.substring(4, 4 + len);
-                if (/^\d+$/.test(candidate)) {
-                    gtin = candidate;
-                    break;
-                }
-            }
-        }
-    }
-    
-    if (gtin) {
-        logToConsole(`✅ Извлечён GTIN: ${gtin}`, 'success');
-        return {
-            type: 'si',
-            display: `СИ: ${code}`,
-            details: `GTIN: ${gtin} (${gtin.length} цифр)`,
-            originalCode: code,
-            gtin: gtin
-        };
-    } else {
-        logToConsole(`⚠️ GTIN не найден в коде: ${code}`, 'warning');
-        return {
-            type: 'si',
-            display: `СИ: ${code}`,
-            details: `GTIN не найден`,
-            originalCode: code,
-            gtin: null
-        };
-    }
-}
-    
-    // 3. Стикеры — 22 цифры
+    // 2. Самопечатаемый стикер — 22 цифры
     else if (length === 22 && /^\d{22}$/.test(code)) {
         const id = code.substring(0, 9);
         const gtin = code.substring(9, 22);
+        logToConsole('Обнаружен самопечатаемый стикер (22 цифры)', 'success');
         return {
-            type: 'stickers',
+            type: 'sticker',
             display: `Стикер: ${code}`,
             details: `ID: ${id}, GTIN: ${gtin}`,
             id: id,
             gtin: gtin,
-            originalCode: originalCode  // ← ОРИГИНАЛ
+            originalCode: originalCode
         };
     }
     
-    // 4. Любой другой DataMatrix
-    else if (length >= 20 && length <= 50) {
-        logToConsole(`DataMatrix (${length} символов)`, 'info');
-        return {
-            type: 'datamatrix',
-            display: `DataMatrix: ${code}`,
-            details: `Длина: ${length} символов`,
-            raw: code,
-            originalCode: originalCode  // ← ОРИГИНАЛ
-        };
+    // 3. СИ — всё остальное от 31 до 60+ символов (ИЛИ любая другая длина, если не подошло выше)
+    else if (length >= 31 && length <= 70) {  // Расширенный диапазон
+        logToConsole(`Обнаружен СИ (${length} символов)`, 'success');
+        
+        // Очищаем от управляющих символов
+        const cleanedCode = cleanDataMatrixCode(code);
+        
+        // Ищем GTIN (любую 13-значную последовательность)
+        let gtin = null;
+        
+        // Паттерн 01 + 14 цифр
+        let match = cleanedCode.match(/01(\d{14})/);
+        if (match) {
+            gtin = match[1];
+            if (gtin.startsWith('0')) gtin = gtin.substring(1);
+            if (gtin.length === 14) gtin = gtin.substring(0, 13);
+        }
+        
+        // Если не нашли - ищем любую 13-значную последовательность
+        if (!gtin) {
+            const anyMatch = cleanedCode.match(/\d{13}/);
+            if (anyMatch) {
+                gtin = anyMatch[0];
+            }
+        }
+        
+        if (gtin && gtin.length === 13) {
+            logToConsole(`✅ Извлечён GTIN: ${gtin}`, 'success');
+            return {
+                type: 'si',
+                display: `СИ: ${code}`,
+                details: `GTIN: ${gtin}`,
+                originalCode: code,
+                gtin: gtin
+            };
+        } else {
+            logToConsole(`⚠️ СИ без GTIN (длина ${length})`, 'warning');
+            return {
+                type: 'si',
+                display: `СИ: ${code}`,
+                details: `GTIN не найден (длина ${length})`,
+                originalCode: code,
+                gtin: null
+            };
+        }
     }
     
-    return null;
+    // 4. Если ничего не подошло — ошибка
+    else {
+        logToConsole(`❌ Неизвестный формат (длина ${length})`, 'error');
+        return null;
+    }
 }
         // Функция добавления результата
         function addResult(text, type, details = '') {
