@@ -379,23 +379,39 @@
         let lastScanTime = 0;
 
 function extractGtinFromGs1(code) {
-    // Формат: 01 + 14 цифр GTIN + 21 + серийный номер
-    // Или: 01 + 14 цифр GTIN + 17 + ... и т.д.
-    
-    // Ищем паттерн: 01 (индикатор) + 14 цифр
-    const gtinPattern = /^01(\d{14})/;
+    // Ищем AI "01" (GTIN) - должно быть 01 + 14 цифр
+    // Паттерн: 01, затем 14 цифр
+    const gtinPattern = /01(\d{14})/;
     const match = code.match(gtinPattern);
     
     if (match) {
-        return match[1];  // 14 цифр GTIN
+        const fullGtin = match[1];  // 14 цифр GTIN
+        logToConsole(`Найден полный GTIN (14 цифр): ${fullGtin}`, 'info');
+        
+        // Если нужен 13-значный GTIN (EAN-13), убираем первую цифру (обычно 0)
+        const ean13 = fullGtin.replace(/^0/, '');
+        if (ean13.length === 13) {
+            logToConsole(`EAN-13 формат: ${ean13}`, 'info');
+            return ean13;
+        }
+        
+        return fullGtin; // 14 цифр
     }
     
-    // Альтернатива: просто найти первую непрерывную последовательность из 13-14 цифр
+    // Если не нашли по AI 01, ищем любую последовательность из 13-14 цифр
     const anyGtin = code.match(/\d{13,14}/);
     if (anyGtin) {
-        return anyGtin[0];
+        const candidate = anyGtin[0];
+        logToConsole(`Найден альтернативный GTIN: ${candidate}`, 'warning');
+        
+        // Если 14 цифр и первая 0 - убираем
+        if (candidate.length === 14 && candidate.startsWith('0')) {
+            return candidate.substring(1);
+        }
+        return candidate;
     }
     
+    logToConsole(`GTIN не найден в коде`, 'error');
     return null;
 }
         
