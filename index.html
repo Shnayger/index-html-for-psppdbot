@@ -379,35 +379,40 @@
         let lastScanTime = 0;
 
 function extractGtinFromGs1(code) {
-    // Ищем AI "01" (GTIN) - должно быть 01 + 14 цифр
-    // Паттерн: 01, затем 14 цифр
-    const gtinPattern = /01(\d{14})/;
-    const match = code.match(gtinPattern);
+    // Очищаем код для анализа
+    const cleanCode = code.replace(/[\x00-\x1F\x7F]/g, '');
+    
+    // Ищем AI "01" (GTIN)
+    const gtinPattern = /01(\d{13,14})/;
+    const match = cleanCode.match(gtinPattern);
     
     if (match) {
-        const fullGtin = match[1];  // 14 цифр GTIN
-        logToConsole(`Найден полный GTIN (14 цифр): ${fullGtin}`, 'info');
+        let fullGtin = match[1];  // 13 или 14 цифр
+        logToConsole(`Найден GTIN (${fullGtin.length} цифр): ${fullGtin}`, 'info');
         
-        // Если нужен 13-значный GTIN (EAN-13), убираем первую цифру (обычно 0)
-        const ean13 = fullGtin.replace(/^0/, '');
-        if (ean13.length === 13) {
-            logToConsole(`EAN-13 формат: ${ean13}`, 'info');
-            return ean13;
+        // Если 14 цифр и первая 0 - убираем ведущий ноль
+        if (fullGtin.length === 14 && fullGtin.startsWith('0')) {
+            fullGtin = fullGtin.substring(1);
+            logToConsole(`Убран ведущий ноль → ${fullGtin} (13 цифр)`, 'info');
         }
         
-        return fullGtin; // 14 цифр
+        // Если всё ещё 14 цифр (без ведущего нуля) - обрезаем до 13
+        if (fullGtin.length === 14) {
+            fullGtin = fullGtin.substring(0, 13);
+            logToConsole(`Обрезано до 13 цифр: ${fullGtin}`, 'warning');
+        }
+        
+        // Проверяем, что получилось 13 цифр
+        if (fullGtin.length === 13 && /^\d+$/.test(fullGtin)) {
+            return fullGtin;
+        }
     }
     
-    // Если не нашли по AI 01, ищем любую последовательность из 13-14 цифр
-    const anyGtin = code.match(/\d{13,14}/);
+    // Альтернатива: ищем любую последовательность из 13 цифр
+    const anyGtin = cleanCode.match(/\d{13}/);
     if (anyGtin) {
         const candidate = anyGtin[0];
-        logToConsole(`Найден альтернативный GTIN: ${candidate}`, 'warning');
-        
-        // Если 14 цифр и первая 0 - убираем
-        if (candidate.length === 14 && candidate.startsWith('0')) {
-            return candidate.substring(1);
-        }
+        logToConsole(`Найден альтернативный GTIN (13 цифр): ${candidate}`, 'warning');
         return candidate;
     }
     
