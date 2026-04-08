@@ -379,44 +379,63 @@
         let lastScanTime = 0;
 
 function extractGtinFromGs1(code) {
-    // Очищаем код для анализа
+    // Очищаем код от непечатаемых символов
     const cleanCode = code.replace(/[\x00-\x1F\x7F]/g, '');
+    logToConsole(`Анализ кода: ${cleanCode}`, 'info');
     
-    // Ищем AI "01" (GTIN)
-    const gtinPattern = /01(\d{13,14})/;
-    const match = cleanCode.match(gtinPattern);
-    
+    // 1. Сначала пробуем стандартный GS1 паттерн 01 + 14 цифр
+    let match = cleanCode.match(/01(\d{14})/);
     if (match) {
-        let fullGtin = match[1];  // 13 или 14 цифр
-        logToConsole(`Найден GTIN (${fullGtin.length} цифр): ${fullGtin}`, 'info');
-        
-        // Если 14 цифр и первая 0 - убираем ведущий ноль
-        if (fullGtin.length === 14 && fullGtin.startsWith('0')) {
-            fullGtin = fullGtin.substring(1);
-            logToConsole(`Убран ведущий ноль → ${fullGtin} (13 цифр)`, 'info');
+        let gtin = match[1];
+        // Убираем ведущий ноль если есть
+        if (gtin.startsWith('0')) {
+            gtin = gtin.substring(1);
         }
-        
-        // Если всё ещё 14 цифр (без ведущего нуля) - обрезаем до 13
-        if (fullGtin.length === 14) {
-            fullGtin = fullGtin.substring(0, 13);
-            logToConsole(`Обрезано до 13 цифр: ${fullGtin}`, 'warning');
+        // Если получилось 13 цифр - возвращаем
+        if (gtin.length === 13 && /^\d+$/.test(gtin)) {
+            logToConsole(`✅ GS1 метод: ${gtin}`, 'success');
+            return gtin;
         }
-        
-        // Проверяем, что получилось 13 цифр
-        if (fullGtin.length === 13 && /^\d+$/.test(fullGtin)) {
-            return fullGtin;
+        // Если 14 цифр без ведущего нуля - обрезаем до 13
+        if (gtin.length === 14) {
+            gtin = gtin.substring(0, 13);
+            logToConsole(`✅ GS1 метод (обрезано): ${gtin}`, 'success');
+            return gtin;
         }
     }
     
-    // Альтернатива: ищем любую последовательность из 13 цифр
-    const anyGtin = cleanCode.match(/\d{13}/);
-    if (anyGtin) {
-        const candidate = anyGtin[0];
-        logToConsole(`Найден альтернативный GTIN (13 цифр): ${candidate}`, 'warning');
-        return candidate;
+    // 2. УНИВЕРСАЛЬНЫЙ МЕТОД: найти ВСЕ 13-значные последовательности
+    const allSequences = [];
+    for (let i = 0; i <= cleanCode.length - 13; i++) {
+        const sequence = cleanCode.substring(i, i + 13);
+        if (/^\d{13}$/.test(sequence)) {
+            allSequences.push(sequence);
+        }
     }
     
-    logToConsole(`GTIN не найден в коде`, 'error');
+    if (allSequences.length > 0) {
+        logToConsole(`🔍 Найдено ${allSequences.length} возможных GTIN: ${allSequences.join(', ')}`, 'info');
+        // Возвращаем ПЕРВУЮ найденную последовательность (обычно это правильный GTIN)
+        logToConsole(`✅ Универсальный метод: ${allSequences[0]}`, 'success');
+        return allSequences[0];
+    }
+    
+    // 3. Если ничего не нашли - ищем 14-значные и обрезаем
+    const fourteenSeq = cleanCode.match(/\d{14}/);
+    if (fourteenSeq) {
+        let gtin = fourteenSeq[0];
+        if (gtin.startsWith('0')) {
+            gtin = gtin.substring(1);
+        } else {
+            gtin = gtin.substring(0, 13);
+        }
+        if (gtin.length === 13 && /^\d+$/.test(gtin)) {
+            logToConsole(`✅ 14→13 метод: ${gtin}`, 'warning');
+            return gtin;
+        }
+    }
+    
+    logToConsole(`❌ GTIN не найден в коде`, 'error');
     return null;
 }
         
