@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -213,8 +212,11 @@
         #log-btn {
             background: linear-gradient(135deg, #6c757d, #5c636a);
         }
-        #clear-btn {
-            background: linear-gradient(135deg, #dc3545, #c82333);
+        #scan-btn {
+            background: linear-gradient(135deg, #6c757d, #5c636a);
+        }
+        #scan-btn.active {
+            background: linear-gradient(135deg, #28a745, #218838);
         }
         #finish-btn {
             background: linear-gradient(135deg, #28a745, #218838);
@@ -259,7 +261,7 @@
             <div class="corner corner-bl"></div>
             <div class="corner corner-br"></div>
             <!-- Подсказка что сканировать -->
-            <div id="scan-hint">Наведите на DataMatrix</div>
+            <div id="scan-hint">Удерживайте кнопку СКАНИРОВАТЬ</div>
         </div>
         
         <!-- Блок результатов -->
@@ -275,9 +277,9 @@
                 <div class="btn-icon">📋</div>
                 <div class="btn-text">Лог</div>
             </button>
-            <button id="clear-btn" class="control-btn">
-                <div class="btn-icon">🗑️</div>
-                <div class="btn-text">Очистить</div>
+            <button id="scan-btn" class="control-btn">
+                <div class="btn-icon">🔘</div>
+                <div class="btn-text">Удерживай для сканирования</div>
             </button>
             <button id="finish-btn" class="control-btn">
                 <div class="btn-icon">✅</div>
@@ -338,9 +340,11 @@
         let scanCount = 0;
         let expectedGtin = null;
         let lastFullDataMatrixCode = '';
+        let isScanningActive = false;  // Флаг: активно ли сканирование сейчас
         const resultsEl = document.getElementById('results');
         const resultsContainer = document.getElementById('results-container');
         const scanHintEl = document.getElementById('scan-hint');
+        const scanBtn = document.getElementById('scan-btn');
         
         // Звуки
         const successSound = document.getElementById('scan-success-sound');
@@ -374,9 +378,25 @@
 
         // Инициализация сканера
         const html5QrCode = new Html5Qrcode("qr-reader");
-        let isScanning = false;
+        let isCameraRunning = false;
         let lastScannedCode = '';
         let lastScanTime = 0;
+
+        // Функция для временной остановки сканирования (останавливает анализ, но камера работает)
+        function pauseScanning() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.pause(true);  // true = пауза, кадры не анализируются
+                logToConsole('⏸️ Сканирование приостановлено (камера работает)', 'warning');
+            }
+        }
+
+        // Функция для возобновления сканирования
+        function resumeScanning() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.resume();
+                logToConsole('▶️ Сканирование возобновлено', 'success');
+            }
+        }
 
 function extractGtinFromGs1(code) {
     // Очищаем код от непечатаемых символов
@@ -590,17 +610,23 @@ function cleanDataMatrixCode(rawCode) {
         // Функция обновления подсказки
         function updateScanHint() {
             if (step === 'datamatrix') {
-                scanHintEl.textContent = 'Наведите на DataMatrix';
+                scanHintEl.textContent = 'Удерживайте кнопку и наведите на DataMatrix';
                 scanHintEl.style.color = '#00ff9d';
                 scanHintEl.style.borderColor = 'rgba(0, 255, 157, 0.4)';
             } else {
-                scanHintEl.textContent = 'Наведите на штрих-код';
+                scanHintEl.textContent = 'Удерживайте кнопку и наведите на штрих-код';
                 scanHintEl.style.color = '#4da6ff';
                 scanHintEl.style.borderColor = 'rgba(77, 166, 255, 0.4)';
             }
         }
 
         function onScanSuccess(decodedText) {
+    // Если сканирование не активно (кнопка не нажата) - игнорируем результат
+    if (!isScanningActive) {
+        logToConsole(`⏸️ Сканирование не активно, код проигнорирован`, 'warning');
+        return;
+    }
+    
     const code = decodedText;
     const now = Date.now();
     
@@ -737,8 +763,6 @@ if (result.type === 'si') {
             }, 300);
         }
 
-        // Начало сканирования - ОШИБКИ ПОЛНОСТЬЮ ИГНОРИРУЮТСЯ
-
 async function sendToServer(logData) {
     const serverUrl = 'https://shutoutlab.boats/api/log-verification';
     
@@ -768,10 +792,10 @@ async function sendToServer(logData) {
     }
 }
         
-        function startScanner() {
-            if (isScanning) return;
+        function startCamera() {
+            if (isCameraRunning) return;
             
-            logToConsole('Запуск сканера...', 'info');
+            logToConsole('Запуск камеры...', 'info');
             
             html5QrCode.start(
                 { facingMode: "environment" },
@@ -779,40 +803,69 @@ async function sendToServer(logData) {
                 onScanSuccess,
                 () => {
                     // ПУСТАЯ ФУНКЦИЯ - все ошибки сканирования игнорируются
-                    // Библиотека будет вызывать эту функцию постоянно при отсутствии кода,
-                    // но мы ничего не делаем и не логируем
                 }
             ).then(() => {
-                isScanning = true;
-                logToConsole('✅ Сканер запущен', 'success');
+                isCameraRunning = true;
+                // После запуска камеры - ставим сканирование на паузу
+                pauseScanning();
+                logToConsole('✅ Камера запущена, сканирование в режиме ожидания', 'success');
+                logToConsole('💡 Удерживайте кнопку "Сканировать" для активации', 'info');
             }).catch(err => {
-                // Только критические ошибки запуска камеры
                 logToConsole(`❌ Ошибка запуска камеры: ${err.message || err}`, 'error');
                 scanHintEl.textContent = 'Ошибка камеры';
                 scanHintEl.style.color = '#ff4444';
             });
         }
 
+        // Обработчики для кнопки сканирования (нажатие и удержание)
+        let scanTimeout = null;
+        
+        function startScanningOnHold() {
+            scanTimeout = setTimeout(() => {
+                if (isCameraRunning) {
+                    isScanningActive = true;
+                    resumeScanning();
+                    scanBtn.classList.add('active');
+                    scanBtn.style.background = 'linear-gradient(135deg, #28a745, #218838)';
+                    logToConsole('🔴 СКАНИРОВАНИЕ АКТИВНО (удерживаю)', 'success');
+                    scanHintEl.style.background = 'rgba(0, 80, 0, 0.9)';
+                }
+            }, 150);  // Задержка 150ms чтобы отличить удержание от случайного нажатия
+        }
+        
+        function stopScanningOnRelease() {
+            if (scanTimeout) {
+                clearTimeout(scanTimeout);
+                scanTimeout = null;
+            }
+            if (isScanningActive) {
+                isScanningActive = false;
+                pauseScanning();
+                scanBtn.classList.remove('active');
+                scanBtn.style.background = 'linear-gradient(135deg, #6c757d, #5c636a)';
+                logToConsole('⏸️ СКАНИРОВАНИЕ ОСТАНОВЛЕНО', 'warning');
+                scanHintEl.style.background = 'rgba(0, 0, 0, 0.8)';
+            }
+        }
+        
         // Обработчики кнопок
-        document.getElementById('clear-btn').onclick = () => {
-            resultsEl.innerHTML = '<div class="empty-results">Результаты сканирования появятся здесь</div>';
-            step = 'datamatrix';
-            scanCount = 0;
-            lastScannedCode = '';
-            updateScanHint();
-            logToConsole('Результаты очищены', 'info');
-        };
+        scanBtn.addEventListener('mousedown', startScanningOnHold);
+        scanBtn.addEventListener('mouseup', stopScanningOnRelease);
+        scanBtn.addEventListener('mouseleave', stopScanningOnRelease);
+        scanBtn.addEventListener('touchstart', startScanningOnHold);
+        scanBtn.addEventListener('touchend', stopScanningOnRelease);
+        scanBtn.addEventListener('touchcancel', stopScanningOnRelease);
         
         document.getElementById('finish-btn').onclick = () => {
-            if (isScanning) {
+            if (isCameraRunning) {
                 html5QrCode.stop().then(() => {
-                    isScanning = false;
-                    logToConsole('Сканер остановлен', 'info');
+                    isCameraRunning = false;
+                    isScanningActive = false;
+                    logToConsole('Камера остановлена', 'info');
                     if (window.Telegram && Telegram.WebApp) {
                         Telegram.WebApp.close();
                     }
                 }).catch(err => {
-                    // Не логируем ошибки остановки
                     if (window.Telegram && Telegram.WebApp) {
                         Telegram.WebApp.close();
                     }
@@ -826,15 +879,7 @@ async function sendToServer(logData) {
 
         // Инициализация
         updateScanHint();
-        startScanner();
-
-        // Автоматически показываем лог
-       // setTimeout(() => {
-       //     logConsole.style.display = 'block';
-      //      logBtn.style.background = 'linear-gradient(135deg, #4a5568, #2d3748)';
-       //     logToConsole('✅ Система готова к работе', 'success');
-       //     logToConsole('Последовательность: DataMatrix → штрих-код → DataMatrix → ...', 'info');
-      //  }, 1000);
+        startCamera();
 
         // CSS для скрытия интерфейса библиотеки
         const style = document.createElement('style');
