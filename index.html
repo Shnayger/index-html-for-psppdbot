@@ -244,15 +244,7 @@
             background: rgba(255, 255, 255, 0.3);
             border-radius: 2px;
         }
-        /* ЗДЕСЬ ВСТАВИТЬ НОВЫЙ КОД */
-        .control-btn {
-            user-select: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            -webkit-tap-highlight-color: transparent;
-            touch-action: manipulation;
-        }
+   
 
                 /* === СТИЛИ ДЛЯ РЕЖИМА СКАНЕРА === */
         body.scanner-mode #video-container,
@@ -698,17 +690,12 @@ function cleanDataMatrixCode(rawCode) {
         }
 
         function onScanSuccess(decodedText) {
-    // Если сканирование не активно И это не режим сканера - игнорируем результат
-    // В режиме сканера (Bluetooth) код всегда обрабатывается
-    if (!isScanningActive && appMode !== 'scanner') {
-        logToConsole(`⏸️ Сканирование не активно, код проигнорирован`, 'warning');
-        return;
-    }
-    
-    const code = decodedText;
-    const now = Date.now();
-    
-    // ... остальной код функции остаётся без изменений
+    // Если сканирование не активно (кнопка не нажата) - игнорируем результат
+    // ✅ Замените на это:
+if (!isScanningActive && appMode !== 'scanner') {
+    logToConsole(`⏸️ Сканирование не активно, код проигнорирован`, 'warning');
+    return;
+}
     
     const code = decodedText;
     const now = Date.now();
