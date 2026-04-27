@@ -253,6 +253,30 @@
             -webkit-tap-highlight-color: transparent;
             touch-action: manipulation;
         }
+
+                /* === СТИЛИ ДЛЯ РЕЖИМА СКАНЕРА === */
+        body.scanner-mode #video-container,
+        body.scanner-mode #scan-hint {
+            display: none !important;
+        }
+        
+        body.scanner-mode #results-container {
+            flex: 1 !important;
+            max-height: none !important;
+            min-height: 200px !important;
+            border-top: none !important;
+        }
+        
+        body.scanner-mode #controls {
+            background: rgba(30, 30, 30, 0.98);
+            border-top: 1px solid #555;
+        }
+        
+        /* Отключаем анимации в режиме сканера для экономии ресурсов */
+        body.scanner-mode .control-btn:active {
+            transform: none !important;
+        }
+        
     </style>
 </head>
 <body>
@@ -309,6 +333,50 @@
             Telegram.WebApp.expand();
         }
 
+        // === ОПРЕДЕЛЕНИЕ РЕЖИМА РАБОТЫ ===
+        const urlParams = new URLSearchParams(window.location.search);
+        const appMode = urlParams.get('mode') || 'camera'; // 'camera' или 'scanner'
+        
+        console.log(`🔧 WebApp запущен в режиме: ${appMode}`);
+
+        // === ПРИМЕНЕНИЕ РЕЖИМА К ИНТЕРФЕЙСУ ===
+        document.addEventListener('DOMContentLoaded', () => {
+            if (appMode === 'scanner') {
+                // Скрываем камеру и показываем только результаты
+                const videoContainer = document.getElementById('video-container');
+                const resultsContainer = document.getElementById('results-container');
+                const scanHint = document.getElementById('scan-hint');
+                const scanBtn = document.getElementById('scan-btn');
+                
+                if (videoContainer) videoContainer.style.display = 'none';
+                if (scanHint) scanHint.style.display = 'none';
+                
+                // Расширяем область результатов на всю высоту
+                if (resultsContainer) {
+                    resultsContainer.style.flex = '1';
+                    resultsContainer.style.maxHeight = 'none';
+                    resultsContainer.style.minHeight = '200px';
+                    resultsContainer.style.borderTop = 'none';
+                }
+                
+                // Меняем текст и состояние кнопки сканирования
+                if (scanBtn) {
+                    scanBtn.querySelector('.btn-text').textContent = 'Сканер активен';
+                    scanBtn.disabled = true;
+                    scanBtn.style.opacity = '0.6';
+                    scanBtn.style.background = 'linear-gradient(135deg, #6c757d, #5c636a)';
+                }
+                
+                // Активируем перехват ввода с клавиатуры (для Bluetooth-сканера)
+                enableScannerInput();
+                
+                logToConsole('🔦 Режим: Bluetooth-сканер (камера отключена)', 'success');
+            } else {
+                // Камера-режим — всё как было
+                logToConsole('📱 Режим: Камера телефона', 'success');
+            }
+        });
+        
         // Система логирования
         const logConsole = document.getElementById('log-console');
         const logBtn = document.getElementById('log-btn');
@@ -802,9 +870,11 @@ async function sendToServer(logData) {
 }
         
         function startCamera() {
-            if (isCameraRunning) return;
+            // Не запускаем камеру в режиме сканера
+            if (appMode === 'scanner' || isCameraRunning) return;
             
             logToConsole('Запуск камеры...', 'info');
+            // ... остальной код функции остаётся без изменений ...
             
             html5QrCode.start(
                 { facingMode: "environment" },
@@ -865,7 +935,12 @@ async function sendToServer(logData) {
         scanBtn.addEventListener('touchend', stopScanningOnRelease);
         scanBtn.addEventListener('touchcancel', stopScanningOnRelease);
         
-        document.getElementById('finish-btn').onclick = () => {
+                document.getElementById('finish-btn').onclick = () => {
+            // В режиме сканера — просто закрываем
+            if (appMode === 'scanner') {
+                logToConsole('✅ Завершение работы со сканером', 'success');
+            }
+            
             if (isCameraRunning) {
                 html5QrCode.stop().then(() => {
                     isCameraRunning = false;
@@ -914,6 +989,57 @@ async function sendToServer(logData) {
             }
         `;
         document.head.appendChild(style);
+
+        // === ОБРАБОТКА ВВОДА С BLUETOOTH-СКАНЕРА ===
+        let scannerBuffer = '';
+        let scannerTimeout = null;
+
+        function enableScannerInput() {
+    // Bluetooth-сканеры могут использовать keydown или input
+    document.addEventListener('keydown', (e) => {
+        if (appMode !== 'scanner') return;
+        
+        // Игнорируем модификаторы (Ctrl, Alt и т.д.)
+        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+        
+        // Если нажат Enter — обрабатываем код
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            if (scannerBuffer.trim()) {
+                handleScannerCode(scannerBuffer.trim());
+                scannerBuffer = '';
+            }
+            return;
+        }
+        
+        // Накопление буфера (только печатаемые символы)
+        if (e.key.length === 1) {
+            scannerBuffer += e.key;
+        }
+        
+        // Сброс таймера (увеличил до 1.5 сек для медленных сканеров)
+        if (scannerTimeout) clearTimeout(scannerTimeout);
+        scannerTimeout = setTimeout(() => {
+            scannerBuffer = '';
+        }, 1500);
+    });
+    
+    // Дополнительно: слушаем input для сканеров, эмулирующих ввод в поля
+    document.addEventListener('input', (e) => {
+        if (appMode !== 'scanner') return;
+        // Игнорируем, если ввод происходит в input/textarea
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+            return;
+        }
+    });
+}
+
+        function handleScannerCode(code) {
+            logToConsole(`📥 Получено со сканера: ${code}`, 'info');
+            // Имитируем успешное сканирование через существующую функцию
+            onScanSuccess(code);
+        }
+        
     </script>
 </body>
 </html>
