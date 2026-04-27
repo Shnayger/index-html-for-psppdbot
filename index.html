@@ -698,11 +698,17 @@ function cleanDataMatrixCode(rawCode) {
         }
 
         function onScanSuccess(decodedText) {
-    // Если сканирование не активно (кнопка не нажата) - игнорируем результат
-    if (!isScanningActive) {
+    // Если сканирование не активно И это не режим сканера - игнорируем результат
+    // В режиме сканера (Bluetooth) код всегда обрабатывается
+    if (!isScanningActive && appMode !== 'scanner') {
         logToConsole(`⏸️ Сканирование не активно, код проигнорирован`, 'warning');
         return;
     }
+    
+    const code = decodedText;
+    const now = Date.now();
+    
+    // ... остальной код функции остаётся без изменений
     
     const code = decodedText;
     const now = Date.now();
