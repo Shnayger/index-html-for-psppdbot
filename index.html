@@ -552,7 +552,7 @@ function cleanDataMatrixCode(rawCode) {
     const originalCode = code;
     
     // 1. УКЗ — строго 30 символов
-            /*
+            
     if (length === 30) {
         logToConsole('Обнаружен УКЗ (30 символов)', 'success');
         const number = code.substring(18, 27);
@@ -582,8 +582,8 @@ function cleanDataMatrixCode(rawCode) {
             originalCode: originalCode
         };
     }
-    */
-    // 3. СИ — всё остальное от 31 до 60+ символов (ИЛИ любая другая длина, если не подошло выше)
+    
+    // 3. СИ — всё остальное от 20 до 60+ символов (ИЛИ любая другая длина, если не подошло выше)
     else if (length >= 20 && length <= 70) {  // Расширенный диапазон
         logToConsole(`Обнаружен СИ (${length} символов)`, 'success');
         
