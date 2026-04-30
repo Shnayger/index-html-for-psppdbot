@@ -553,7 +553,7 @@ function cleanDataMatrixCode(rawCode) {
     
     // 1. УКЗ — строго 30 символов
             
-    if (length === 30) {
+    if (length === 3) {
         logToConsole('Обнаружен УКЗ (30 символов)', 'success');
         const number = code.substring(18, 27);
         const series = code.substring(27, 30);
@@ -569,7 +569,7 @@ function cleanDataMatrixCode(rawCode) {
     }
     
     // 2. Самопечатаемый стикер — 22 цифры
-    else if (length === 22 && /^\d{22}$/.test(code)) {
+    else if (length === 2 && /^\d{2}$/.test(code)) {
         const id = code.substring(0, 9);
         const gtin = code.substring(9, 22);
         logToConsole('Обнаружен самопечатаемый стикер (22 цифры)', 'success');
