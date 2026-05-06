@@ -834,6 +834,56 @@ if (result.type === 'si') {
             }, 300);
         }
 
+
+        // Функция для верификации отгрузки (POST)
+async function verifyShipment(barcode, isVerified) {
+    const serverUrl = 'https://shutoutlab.boats/api/verify-shipment';
+    
+    try {
+        const response = await fetch(serverUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                barcode: barcode,
+                is_verified: isVerified
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === "success") {
+            logToConsole(`✅ Отгрузка верифицирована: ${result.barcode}`, 'success');
+            return true;
+        } else {
+            logToConsole(`❌ Ошибка верификации: ${JSON.stringify(result)}`, 'error');
+            return false;
+        }
+    } catch (err) {
+        logToConsole(`❌ Ошибка сети (verifyShipment): ${err.message}`, 'error');
+        return false;
+    }
+}
+
+// Функция для проверки статуса отгрузки (GET)
+async function checkShipmentStatus(barcode) {
+    const serverUrl = `https://shutoutlab.boats/api/check-shipment/${encodeURIComponent(barcode)}`;
+    
+    try {
+        const response = await fetch(serverUrl);
+        const result = await response.json();
+        
+        if (result.exists) {
+            logToConsole(`📦 Статус: ${result.barcode} — верифицирован: ${result.is_verified}`, 'info');
+            return result;
+        } else {
+            logToConsole(`❓ Barcode ${barcode} не найден в системе отгрузки`, 'warning');
+            return null;
+        }
+    } catch (err) {
+        logToConsole(`❌ Ошибка сети (checkShipmentStatus): ${err.message}`, 'error');
+        return null;
+    }
+}
 async function sendToServer(logData) {
     const serverUrl = 'https://shutoutlab.boats/api/log-verification';
     
