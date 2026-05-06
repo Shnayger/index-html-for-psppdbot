@@ -836,7 +836,8 @@ if (result.type === 'si') {
 
 
         // Функция для верификации отгрузки (POST)
-async function verifyShipment(barcode, isVerified) {
+// Функция для верификации отгрузки (POST)
+async function verifyShipment(unique_marking_code, isVerified) {
     const serverUrl = 'https://shutoutlab.boats/api/verify-shipment';
     
     try {
@@ -844,7 +845,7 @@ async function verifyShipment(barcode, isVerified) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                barcode: barcode,
+                unique_marking_code: unique_marking_code,
                 is_verified: isVerified
             })
         });
@@ -852,7 +853,7 @@ async function verifyShipment(barcode, isVerified) {
         const result = await response.json();
         
         if (result.status === "success") {
-            logToConsole(`✅ Отгрузка верифицирована: ${result.barcode}`, 'success');
+            logToConsole(`✅ Отгрузка верифицирована: ${result.unique_marking_code}`, 'success');
             return true;
         } else {
             logToConsole(`❌ Ошибка верификации: ${JSON.stringify(result)}`, 'error');
@@ -865,18 +866,18 @@ async function verifyShipment(barcode, isVerified) {
 }
 
 // Функция для проверки статуса отгрузки (GET)
-async function checkShipmentStatus(barcode) {
-    const serverUrl = `https://shutoutlab.boats/api/check-shipment/${encodeURIComponent(barcode)}`;
+async function checkShipmentStatus(unique_marking_code) {
+    const serverUrl = `https://shutoutlab.boats/api/check-shipment/${encodeURIComponent(unique_marking_code)}`;
     
     try {
         const response = await fetch(serverUrl);
         const result = await response.json();
         
         if (result.exists) {
-            logToConsole(`📦 Статус: ${result.barcode} — верифицирован: ${result.is_verified}`, 'info');
+            logToConsole(`📦 Статус: ${result.unique_marking_code} — верифицирован: ${result.is_verified}`, 'info');
             return result;
         } else {
-            logToConsole(`❓ Barcode ${barcode} не найден в системе отгрузки`, 'warning');
+            logToConsole(`❓ Unique marking code ${unique_marking_code} не найден в системе отгрузки`, 'warning');
             return null;
         }
     } catch (err) {
