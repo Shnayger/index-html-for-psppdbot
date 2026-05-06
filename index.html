@@ -532,15 +532,17 @@ function extractGtinFromGs1(code) {
 function cleanDataMatrixCode(rawCode) {
     if (!rawCode) return '';
     
-    // Удаляем ТОЛЬКО символ с кодом 29 (Group Separator - GS)
-    // Именно он вставляется программой-источником и мешает
-    let cleaned = rawCode.replace(/\x1D/g, '');
+    // Удаляем все непечатаемые символы (ASCII 0-31, кроме пробела)
+    // Оставляем только: цифры, буквы, пробел, тире, точки
+    let cleaned = rawCode.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
     
-    // Всё остальное оставляем КАК ЕСТЬ: буквы, цифры, другие символы
-    // Ничего больше не удаляем!
+    // Дополнительно: заменяем GS (ASCII 29), RS (30), US (31) на пробел или пустоту
+    cleaned = cleaned.replace(/[\x1D\x1E\x1F]/g, '');
     
-    logToConsole(`Очистка: было ${rawCode.length} символов, стало ${cleaned.length}`, 'info');
-    logToConsole(`Очищенный код: ${cleaned}`, 'info');
+    // Иногда FNC1 приходит как символ \x1D или \x1C
+    cleaned = cleaned.replace(/[\x1C]/g, '');
+    
+    logToConsole(`Оригинал: ${rawCode.length} символов, непечатаемых: ${rawCode.length - cleaned.length}`, 'warning');
     
     return cleaned;
 }
