@@ -888,6 +888,20 @@ async function sendToServer(logData) {
     const serverUrl = 'https://shutoutlab.boats/api/log-verification';
     
     try {
+        // Сначала проверяем статус в shipment_logs по DATAMATRIX
+        const shipmentStatus = await checkShipmentStatus(logData.datamatrix_code);
+        
+        if (shipmentStatus && shipmentStatus.exists) {
+            if (shipmentStatus.is_verified) {
+                logToConsole(`📦 DataMatrix ${logData.datamatrix_code.substring(0, 20)}... УЖЕ ВЕРИФИЦИРОВАН в отгрузке (${shipmentStatus.verified_at})`, 'warning');
+            } else {
+                logToConsole(`📦 DataMatrix ${logData.datamatrix_code.substring(0, 20)}... НАЙДЕН в отгрузке, но НЕ ВЕРИФИЦИРОВАН`, 'warning');
+            }
+        } else {
+            logToConsole(`📦 DataMatrix ${logData.datamatrix_code.substring(0, 20)}... НЕ НАЙДЕН в shipment_logs`, 'info');
+        }
+        
+        // Отправляем основную проверку
         const response = await fetch(serverUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -895,8 +909,18 @@ async function sendToServer(logData) {
         });
         
         const result = await response.json();
+        
         if (result.status === "success") {
             logToConsole('✅ Пара сохранена на сервере', 'success');
+            
+            // Верифицируем отгрузку по DATAMATRIX
+            await verifyShipment(logData.datamatrix_code, logData.is_success);
+            
+            if (logData.is_success) {
+                logToConsole(`✅ DataMatrix помечен как ВЕРИФИЦИРОВАННЫЙ`, 'success');
+            } else {
+                logToConsole(`⚠️ DataMatrix помечен как НЕВЕРИФИЦИРОВАННЫЙ (несовпадение)`, 'warning');
+            }
         } 
         else if (result.status === "duplicate") {
             logToConsole('⚠️ Такая пара уже сканировалась', 'warning');
