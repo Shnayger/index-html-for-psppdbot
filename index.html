@@ -1099,11 +1099,30 @@ async function sendToServer(logData) {
             logToConsole('🔘 Режим сканера: поле ввода активировано', 'success');
         }
 
-        function handleScannerCode(code) {
-            logToConsole(`📥 Получено со сканера: ${code}`, 'info');
-            // Имитируем успешное сканирование через существующую функцию
-            onScanSuccess(code);
+        function reverseString(str) {
+    return str.split('').reverse().join('');
+}
+
+function handleScannerCode(code) {
+    logToConsole(`📥 Получено со сканера: ${code}`, 'info');
+    
+    let finalCode = code;
+    
+    // Если код не начинается с "01", пробуем развернуть
+    if (!code.startsWith('01')) {
+        const reversed = reverseString(code);
+        if (reversed.startsWith('01')) {
+            logToConsole(`🔄 Код был в обратном порядке, исправлено: ${reversed}`, 'warning');
+            finalCode = reversed;
+        } else {
+            logToConsole(`⚠️ Код не начинается с 01 даже после разворота, оставляем как есть`, 'warning');
         }
+    } else {
+        logToConsole(`✅ Код в правильном порядке`, 'success');
+    }
+    
+    onScanSuccess(finalCode);
+}
         
     </script>
 </body>
