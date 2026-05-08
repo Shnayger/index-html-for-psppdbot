@@ -1099,11 +1099,16 @@ async function sendToServer(logData) {
             logToConsole('🔘 Режим сканера: поле ввода активировано', 'success');
         }
 
-        function handleScannerCode(code) {
-            logToConsole(`📥 Обработка кода: ${code.substring(0, 50)}...`, 'info');
-            // Имитируем успешное сканирование через существующую функцию
-            onScanSuccess(code);
-        }
+        function reverseString(str) {
+    return str.split('').reverse().join('');
+}
+
+function handleScannerCode(code) {
+    const reversedCode = reverseString(code);
+    logToConsole(`📥 Получено со сканера (оригинал): ${code}`, 'info');
+    logToConsole(`🔄 Перевёрнутый код: ${reversedCode}`, 'warning');
+    onScanSuccess(reversedCode);
+}
         
     </script>
 </body>
