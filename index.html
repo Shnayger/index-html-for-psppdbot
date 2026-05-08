@@ -1103,22 +1103,36 @@ async function sendToServer(logData) {
     return str.split('').reverse().join('');
 }
 
+function isEAN13(code) {
+    // EAN-13: 13 цифр, первая цифра обычно 4,5,6,7
+    return /^\d{13}$/.test(code) && ['4','5','6','7'].includes(code[0]);
+}
+
+function isDataMatrix(code) {
+    // DataMatrix: длина 20-70, содержит буквы и цифры
+    return code.length >= 20 && code.length <= 70;
+}
+
 function handleScannerCode(code) {
-    logToConsole(`📥 Получено со сканера: ${code}`, 'info');
+    logToConsole(`📥 Получено со сканера: ${code} (длина ${code.length})`, 'info');
     
     let finalCode = code;
     
-    // Если код не начинается с "01", пробуем развернуть
-    if (!code.startsWith('01')) {
-        const reversed = reverseString(code);
-        if (reversed.startsWith('01')) {
-            logToConsole(`🔄 Код был в обратном порядке, исправлено: ${reversed}`, 'warning');
-            finalCode = reversed;
-        } else {
-            logToConsole(`⚠️ Код не начинается с 01 даже после разворота, оставляем как есть`, 'warning');
-        }
-    } else {
-        logToConsole(`✅ Код в правильном порядке`, 'success');
+    // Пробуем развернуть и посмотреть, что получится
+    const reversed = reverseString(code);
+    
+    // Если развёрнутая версия похожа на EAN-13
+    if (isEAN13(reversed) && !isEAN13(code)) {
+        logToConsole(`🔄 Штрих-код был в обратном порядке, исправлено: ${reversed}`, 'warning');
+        finalCode = reversed;
+    }
+    // Если развёрнутая версия похожа на DataMatrix (начинается с 01)
+    else if (isDataMatrix(reversed) && reversed.startsWith('01') && !code.startsWith('01')) {
+        logToConsole(`🔄 DataMatrix был в обратном порядке, исправлено: ${reversed.substring(0, 50)}...`, 'warning');
+        finalCode = reversed;
+    }
+    else {
+        logToConsole(`✅ Код оставлен без изменений`, 'success');
     }
     
     onScanSuccess(finalCode);
