@@ -272,6 +272,11 @@
     </style>
 </head>
 <body>
+    <!-- Скрытое поле для внешнего сканера -->
+    <input type="text" id="hidden-scanner-input" 
+           style="position: fixed; top: -100px; left: -100px; width: 1px; height: 1px; opacity: 0;" 
+           autocomplete="off" />
+
     <!-- Консоль для логов -->
     <div id="log-console"></div>
     
@@ -836,7 +841,6 @@ if (result.type === 'si') {
 
 
         // Функция для верификации отгрузки (POST)
-// Функция для верификации отгрузки (POST)
 async function verifyShipment(unique_marking_code, isVerified) {
     const serverUrl = 'https://shutoutlab.boats/api/verify-shipment';
     
@@ -1060,51 +1064,43 @@ async function sendToServer(logData) {
         document.head.appendChild(style);
 
         // === ОБРАБОТКА ВВОДА С BLUETOOTH-СКАНЕРА ===
-        let scannerBuffer = '';
-        let scannerTimeout = null;
-
         function enableScannerInput() {
-    // Bluetooth-сканеры могут использовать keydown или input
-    document.addEventListener('keydown', (e) => {
-        if (appMode !== 'scanner') return;
-        
-        // Игнорируем модификаторы (Ctrl, Alt и т.д.)
-        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
-        
-        // Если нажат Enter — обрабатываем код
-        if (e.key === 'Enter' || e.keyCode === 13) {
-            e.preventDefault();
-            if (scannerBuffer.trim()) {
-                handleScannerCode(scannerBuffer.trim());
-                scannerBuffer = '';
+            const hiddenInput = document.getElementById('hidden-scanner-input');
+            
+            if (!hiddenInput) {
+                logToConsole('❌ Ошибка: скрытое поле не найдено', 'error');
+                return;
             }
-            return;
+            
+            // Фокусируем поле при запуске
+            hiddenInput.focus();
+            hiddenInput.value = '';
+            
+            // Обработчик нажатия клавиш в поле
+            hiddenInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.keyCode === 13) {
+                    e.preventDefault();
+                    const code = hiddenInput.value.trim();
+                    if (code) {
+                        logToConsole(`📥 Получено со сканера: ${code}`, 'success');
+                        handleScannerCode(code);
+                        hiddenInput.value = '';
+                    }
+                }
+            });
+            
+            // При потере фокуса — возвращаем его обратно
+            hiddenInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    hiddenInput.focus();
+                }, 10);
+            });
+            
+            logToConsole('🔘 Режим сканера: поле ввода активировано', 'success');
         }
-        
-        // Накопление буфера (только печатаемые символы)
-        if (e.key.length === 1) {
-            scannerBuffer += e.key;
-        }
-        
-        // Сброс таймера (увеличил до 1.5 сек для медленных сканеров)
-        if (scannerTimeout) clearTimeout(scannerTimeout);
-        scannerTimeout = setTimeout(() => {
-            scannerBuffer = '';
-        }, 1500);
-    });
-    
-    // Дополнительно: слушаем input для сканеров, эмулирующих ввод в поля
-    document.addEventListener('input', (e) => {
-        if (appMode !== 'scanner') return;
-        // Игнорируем, если ввод происходит в input/textarea
-        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-            return;
-        }
-    });
-}
 
         function handleScannerCode(code) {
-            logToConsole(`📥 Получено со сканера: ${code}`, 'info');
+            logToConsole(`📥 Обработка кода: ${code.substring(0, 50)}...`, 'info');
             // Имитируем успешное сканирование через существующую функцию
             onScanSuccess(code);
         }
