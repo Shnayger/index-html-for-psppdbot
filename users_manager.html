@@ -7,6 +7,9 @@
     <meta property="og:type" content="website">
     <title>Управление пользователями</title>
     
+    <!-- Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
     <style>
         * {
             box-sizing: border-box;
@@ -62,14 +65,12 @@
         }
         .user-name {
             font-weight: 600;
-            font-size: 16px;
+            font-size: 15px;
             color: #333;
-            margin-bottom: 8px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid #eee;
+            margin-bottom: 6px;
         }
         .user-org {
-            font-size: 13px;
+            font-size: 12px;
             color: #666;
             margin-bottom: 10px;
         }
@@ -81,35 +82,16 @@
         .role-option {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
         }
         .role-option input[type="radio"] {
             margin: 0;
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
         }
         .role-option label {
-            font-size: 14px;
+            font-size: 13px;
             color: #333;
-        }
-        .status {
-            margin-top: 8px;
-            font-size: 12px;
-            text-align: center;
-            padding: 6px;
-            border-radius: 6px;
-        }
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-        }
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        .status.info {
-            background: #d1ecf1;
-            color: #0c5460;
         }
         .footer {
             position: fixed;
@@ -132,24 +114,6 @@
             width: 90%;
             max-width: 300px;
         }
-        .close-btn:active {
-            background: #d32f2f;
-            transform: scale(0.98);
-        }
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-        .retry-btn {
-            background: #4caf50;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
-            margin-top: 10px;
-            cursor: pointer;
-        }
         .save-btn {
             background: #4caf50;
             color: white;
@@ -163,7 +127,11 @@
         }
         .save-btn:active {
             background: #45a049;
-            transform: scale(0.98);
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
         }
     </style>
 </head>
@@ -172,28 +140,24 @@
         <h1>👥 Управление пользователями</h1>
         
         <div class="debug-panel" id="debugPanel">
-            <pre id="debugLog">🟢 Загрузка Telegram SDK...</pre>
+            <pre id="debugLog">🟢 Загрузка...</pre>
         </div>
         
-        <div id="stats" class="stats">📊 Ожидание...</div>
-        <div id="users-list">⏳ Подготовка...</div>
+        <div id="stats" class="stats">📊 Загрузка...</div>
+        <div id="users-list">⏳ Загрузка пользователей...</div>
     </div>
     <div class="footer">
         <button class="close-btn" id="closeBtn">✖️ Закрыть</button>
     </div>
 
-    <!-- Загружаем Telegram SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
     <script>
         // ========== ЛОГГЕР ==========
         let debugMessages = [];
         
-        function addDebugLog(message, type = 'info') {
+        function addDebugLog(message) {
             const timestamp = new Date().toLocaleTimeString();
             const logMessage = `[${timestamp}] ${message}`;
             debugMessages.push(logMessage);
-            
             const debugLogElement = document.getElementById('debugLog');
             if (debugLogElement) {
                 debugLogElement.textContent = debugMessages.join('\n');
@@ -203,67 +167,68 @@
             console.log(logMessage);
         }
         
-        function showStatus(cardId, message, type) {
-            addDebugLog(`Статус: ${message}`);
-            
-            if (cardId) {
-                const statusDiv = document.getElementById(`status-${cardId}`);
-                if (statusDiv) {
-                    statusDiv.textContent = message;
-                    statusDiv.className = `status ${type}`;
-                    statusDiv.style.display = 'block';
-                    setTimeout(() => {
-                        if (statusDiv) statusDiv.style.display = 'none';
-                    }, 3000);
-                }
+        // ========== TELEGRAM INIT ==========
+        let tg = null;
+        
+        function waitForTelegram() {
+            if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp) {
+                tg = window.Telegram.WebApp;
+                addDebugLog('✅ Telegram SDK загружен');
+                tg.ready();
+                tg.expand();
+                tg.MainButton.hide();
+                loadUsers();
             } else {
-                const statsDiv = document.getElementById('stats');
-                statsDiv.innerHTML = message;
-                statsDiv.className = `stats ${type}`;
-                setTimeout(() => {
-                    statsDiv.innerHTML = '📊 Готово';
-                    statsDiv.className = 'stats';
-                }, 3000);
+                addDebugLog('⏳ Ожидание Telegram SDK...');
+                setTimeout(waitForTelegram, 100);
             }
         }
         
-        // ========== ОСНОВНАЯ ЛОГИКА ==========
-        let tg = null;
+        // ========== ДАННЫЕ ==========
         let usersData = [];
         let changedUsers = new Set();
-        let isWaitingResponse = false;
+        let receivedPages = 0;
+        let expectedPages = 0;
+        let allUsers = [];
         
-        // Функция отправки данных боту
-        function sendToBot(data) {
-            if (!tg) {
-                addDebugLog('❌ Telegram не инициализирован', 'error');
-                return false;
-            }
-            
-            const jsonData = JSON.stringify(data);
-            addDebugLog(`📤 Отправка: ${jsonData.substring(0, 200)}`);
-            
-            try {
-                tg.sendData(jsonData);
-                isWaitingResponse = true;
-                return true;
-            } catch(e) {
-                addDebugLog(`❌ Ошибка: ${e.message}`, 'error');
-                return false;
-            }
-        }
-        
-        // Загрузка пользователей
         function loadUsers() {
-            addDebugLog('🔄 Загрузка пользователей...');
-            showStatus(null, '⏳ Загрузка...', 'info');
+            addDebugLog('🔄 Запрос списка пользователей...');
+            allUsers = [];
+            receivedPages = 0;
+            expectedPages = 0;
+            document.getElementById('users-list').innerHTML = '<div class="loading">⏳ Загрузка...</div>';
             sendToBot({ action: 'get_users' });
         }
         
-        // Сохранение изменений
+        function sendToBot(data) {
+            if (!tg) {
+                addDebugLog('❌ Telegram не инициализирован');
+                return;
+            }
+            tg.sendData(JSON.stringify(data));
+            addDebugLog('📤 Отправлено: ' + JSON.stringify(data));
+        }
+        
+        function changeRole(userId, newRole) {
+            const user = usersData.find(u => u.id == userId);
+            if (user && user.role !== newRole) {
+                user.new_role = newRole;
+                changedUsers.add(userId);
+                addDebugLog(`🔄 ${user.full_name}: ${user.role} -> ${newRole}`);
+                
+                const card = document.getElementById(`card-${userId}`);
+                if (card) card.style.borderLeft = '3px solid #ff9800';
+                
+                if (tg) {
+                    tg.MainButton.setText(`💾 Сохранить (${changedUsers.size})`);
+                    tg.MainButton.show();
+                }
+            }
+        }
+        
         function saveChanges() {
             if (changedUsers.size === 0) {
-                showStatus(null, 'Нет изменений', 'error');
+                addDebugLog('Нет изменений');
                 return;
             }
             
@@ -282,41 +247,17 @@
             sendToBot({ action: 'save_roles', changes: changes });
         }
         
-        // Изменение роли
-        function changeRole(userId, newRole) {
-            const user = usersData.find(u => u.id == userId);
-            if (!user) return;
-            
-            if (user.role !== newRole) {
-                user.new_role = newRole;
-                changedUsers.add(userId);
-                addDebugLog(`🔄 ${user.full_name}: ${user.role} -> ${newRole}`);
-                
-                const card = document.getElementById(`card-${userId}`);
-                if (card) card.style.borderLeft = '3px solid #ff9800';
-                
-                if (tg) {
-                    tg.MainButton.setText(`💾 Сохранить (${changedUsers.size})`);
-                    tg.MainButton.show();
-                }
-            }
-        }
-        
-        // Рендер списка пользователей
         function renderUsers(users) {
-            addDebugLog(`🎨 Рендер: ${users.length} пользователей`);
             usersData = users;
-            
             const container = document.getElementById('users-list');
             const statsDiv = document.getElementById('stats');
             
-            if (!users || users.length === 0) {
+            statsDiv.innerHTML = `📊 Всего пользователей: ${users.length}`;
+            
+            if (users.length === 0) {
                 container.innerHTML = '<div class="loading">📭 Нет пользователей</div>';
-                statsDiv.innerHTML = '📊 Всего: 0';
                 return;
             }
-            
-            statsDiv.innerHTML = `📊 Всего пользователей: ${users.length}`;
             
             let html = '';
             for (const user of users) {
@@ -347,14 +288,13 @@
                                 <label>🎯 Маркировщик</label>
                             </div>
                         </div>
-                        <div id="status-${user.id}" class="status" style="display: none;"></div>
                     </div>
                 `;
             }
             
             html += `<button class="save-btn" onclick="saveChanges()">💾 Сохранить изменения</button>`;
             container.innerHTML = html;
-            showStatus(null, `✅ Загружено ${users.length} пользователей`, 'success');
+            addDebugLog(`✅ Отображено ${users.length} пользователей`);
         }
         
         function escapeHtml(text) {
@@ -364,78 +304,43 @@
             return div.innerHTML;
         }
         
-        // Обработка ответов от бота
+        // ========== ОБРАБОТКА ОТВЕТОВ ОТ БОТА ==========
         window.handleBotResponse = function(data) {
             addDebugLog(`📨 Ответ: ${data.action}`);
-            isWaitingResponse = false;
             
             if (data.action === 'users_list') {
-                renderUsers(data.users);
+                // СОБИРАЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ ИЗ ЧАСТЕЙ
+                if (data.users && data.users.length > 0) {
+                    allUsers = allUsers.concat(data.users);
+                    addDebugLog(`📦 Получена часть ${data.page}/${data.total_pages}, всего накоплено: ${allUsers.length}`);
+                }
+                
+                // Если это последняя часть — отображаем
+                if (data.is_last === true || data.page === data.total_pages) {
+                    addDebugLog(`✅ Все части получены! Отображаем ${allUsers.length} пользователей`);
+                    renderUsers(allUsers);
+                }
+                
             } else if (data.action === 'save_result') {
                 if (data.success) {
-                    showStatus(null, `✅ Сохранено ${data.saved} изменений`, 'success');
+                    addDebugLog(`✅ Сохранено ${data.saved} изменений`);
                     changedUsers.clear();
                     if (tg) tg.MainButton.hide();
                     setTimeout(() => loadUsers(), 1000);
                 } else {
-                    showStatus(null, `❌ Ошибка: ${data.error}`, 'error');
+                    addDebugLog(`❌ Ошибка: ${data.error}`);
                 }
             }
         };
         
-        // ========== ИНИЦИАЛИЗАЦИЯ ==========
-        // Ждём загрузки Telegram SDK
-        function waitForTelegram() {
-            if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp) {
-                tg = window.Telegram.WebApp;
-                addDebugLog('✅ Telegram SDK загружен!');
-                
-                tg.ready();
-                tg.expand();
-                tg.MainButton.hide();
-                tg.enableClosingConfirmation();
-                
-                addDebugLog(`📱 Версия: ${tg.version}, платформа: ${tg.platform}`);
-                
-                // Загружаем данные
-                loadUsers();
-            } else {
-                addDebugLog('⏳ Ожидание Telegram SDK...');
-                setTimeout(waitForTelegram, 100);
-            }
-        }
-        
-        // Кнопка закрытия
+        // ========== ЗАПУСК ==========
         document.getElementById('closeBtn').onclick = function() {
-            addDebugLog('🔴 Закрытие');
             if (tg) tg.close();
             else window.close();
         };
         
-        // Старт
-        addDebugLog('🚀 Запуск, ожидание Telegram SDK...');
+        addDebugLog('🚀 Запуск приложения');
         waitForTelegram();
-        
-        // Диагностика
-        addDebugLog(`📱 User Agent: ${navigator.userAgent}`);
-        addDebugLog(`📱 Screen: ${window.innerWidth}x${window.innerHeight}`);
-        
-        // Таймаут
-        setTimeout(() => {
-            if (isWaitingResponse) {
-                addDebugLog('⚠️ Таймаут: нет ответа от бота', 'error');
-                isWaitingResponse = false;
-                const container = document.getElementById('users-list');
-                if (container && container.innerHTML.includes('Загрузка')) {
-                    container.innerHTML = `
-                        <div class="loading">
-                            ⚠️ Нет ответа от бота<br>
-                            <button class="retry-btn" onclick="loadUsers()">🔄 Повторить</button>
-                        </div>
-                    `;
-                }
-            }
-        }, 10000);
     </script>
 </body>
 </html>
